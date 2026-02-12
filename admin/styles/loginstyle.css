@@ -1,0 +1,85 @@
+body {
+   background:#E0E5F5;
+   padding:20px 0px 20px 0px;
+   font-family: 'Open Sans', sans-serif;
+}
+.bar {
+border-radius: 10px;
+//background-size: cover;
+padding: 25px 0px;
+background: linear-gradient(to bottom,  #ADBEE4 50%,#658AC3 93%); /* W3C */
+}
+
+.bar h2 {
+  //font-size: 20px;
+  //color: #fff;
+  margin: 0 auto;
+}
+.app {
+  border-radius: 25px;
+  background:#ADBEE4;
+  width: 25%;
+  margin: 0 auto;
+  text-align: center;
+  padding: 0px 0px 30px 0px;
+}
+.img {
+  margin: 40px 0px 35px 0px;
+  position:relative;
+  
+}
+.img img {
+  //width: 20%;
+}
+
+.app input[type="text"] {
+background:#E0E5F5;
+  outline: none;
+  font-size: 18px;
+  text-align: center;
+  padding: 5px 5px 5px 5px;
+  margin: 0px 0px 15px 0px;
+  width: 60%;
+  border-bottom: 1px solid #999;
+  -webkit-appearance: none;
+  border-top: none;
+  border-right: none;
+  border-left: none;
+}
+.app input[type="password"] {
+background:#E0E5F5;
+  outline: none;
+  font-size: 18px;
+  text-align: center;
+  padding: 5px 5px 5px 5px;
+  margin: 0px 0px 15px 0px;
+  width: 60%;
+  border-bottom: 1px solid #999;
+  -webkit-appearance: none;
+  border-top: none;
+  border-right: none;
+  border-left: none;
+}
+.app input[type="submit"] {
+  background: #658AC3;
+  color: #FFF;
+  font-size: 25px;
+  font-weight: 300;
+  width: 40%;
+  padding: 14px 15px;
+  border-radius: 5px;
+  -webkit-border-radius: 5px;
+  -moz-border-radius: 5px;
+  -o-border-radius: 5px;
+  margin: 20px 0px 0px 0px;
+  border: none;
+  cursor: pointer;
+  outline: none;
+}
+.app input[type="submit"]:hover {
+  background: #39DAF7;
+  transition: 0.5s all;
+  -webkit-transition: 0.5s all;
+  -moz-transition: 0.5s all;
+  -o-transition: 0.5s all;
+}
