@@ -55,8 +55,8 @@ $Frtarget=mysqli_query($con,"SELECT sum(loadAmnt) FROM tbl_mobile_load WHERE loa
 $Data=mysqli_fetch_array($Frtarget);
 $FrMobLoadAchieved = $Data['sum(loadAmnt)'];
 
-if($FrOtartarge > 0)
-	$FrOtarAchievedPercent=($FrOtarAchieved/$FrOtartarget)*100;
+if($FrMobLoadTarget > 0)
+	$FrOtarAchievedPercent=($FrMobLoadAchieved/$FrMobLoadTarget)*100;
 else
 	$FrOtarAchievedPercent="emp";
 	
@@ -108,7 +108,7 @@ $d3=mysqli_fetch_array($sold);
 $sell = $d3['sum(csQty)'];
 
 
-$getRate = mysqli_query($con,"SELECT purchasePrice from rates WHERE spName= 'Rs.100' ORDER BY rtID DESC LIMIT 1")or die(mysqli_query());
+$getRate = mysqli_query($con,"SELECT purchasePrice from rates WHERE spName= 'Rs.100' ORDER BY rtID DESC LIMIT 1")or die(mysqli_error($con));
 $rt=mysqli_fetch_array($getRate);
 $cpp=$rt['purchasePrice'];
 		$cardClosing=($FrCardopening + $FrCardAchieved) - $sell;
@@ -237,24 +237,24 @@ $cardPL = $Data['sum(csProLoss)'];
 					$sumAllOpenCost=0;	$sumAllPrCost=0;	$sumOpPrCost=0;	$sumTotSale=0;	$sumSaleCost=0;	$totalRemInvestMob=0;	
 					
 					
-					$sql = mysqli_query($con,"SELECT typeName FROM types WHERE productName='$Prod' ")or die(mysqli_query());
+					$sql = mysqli_query($con,"SELECT typeName FROM types WHERE productName='$Prod' ")or die(mysqli_error($con));
 					WHILE($Data=mysqli_fetch_array($sql))
 					{
 						$open=0;
 						
 						$subType=$Data['typeName'];
 					// getting purchase price
-							$q = mysqli_query($con,"SELECT purchasePrice from rates WHERE pName= '$Prod' AND spName='$subType' ORDER BY rtID DESC LIMIT 1 ")or die(mysqli_query());	
+							$q = mysqli_query($con,"SELECT purchasePrice from rates WHERE pName= '$Prod' AND spName='$subType' ORDER BY rtID DESC LIMIT 1 ")or die(mysqli_error($con));	
 							$r=mysqli_fetch_array($q);
 						$rt1=$r['purchasePrice'];
 					
 					// getting opening stock
-							$q = mysqli_query($con,"SELECT * from openingclosing WHERE ocType= '$Prod' AND oMonth='$CurrentMonth' AND ocEmp='$subType' ORDER BY ocID DESC LIMIT 1 ")or die(mysqli_query());	
+							$q = mysqli_query($con,"SELECT * from openingclosing WHERE ocType= '$Prod' AND oMonth='$CurrentMonth' AND ocEmp='$subType' ORDER BY ocID DESC LIMIT 1 ")or die(mysqli_error($con));	
 							$d=mysqli_fetch_array($q);
 						$open=$d['ocAmnt'];
 					
 					// getting purchases during current month
-							$q = mysqli_query($con,"SELECT sum(qty) from tbl_product_stock WHERE pSubType='$subType' AND trtype='Received' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_query());	
+							$q = mysqli_query($con,"SELECT sum(qty) from tbl_product_stock WHERE pSubType='$subType' AND trtype='Received' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_error($con));	
 							$d=mysqli_fetch_array($q);
 						$purchz=$d['sum(qty)'];
 						
@@ -268,10 +268,10 @@ $cardPL = $Data['sum(csProLoss)'];
 					// getting sale quantity, sale rate and sale amount
 							
 							$slAmnt=0; $Sumqt2=0; $Sumrt2=0; $totSale=0; $cnt=0; $avgrt=0; $saleCost=0;
-							$q = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_query());	
+							$q = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_error($con));	
 							WHILE($d=mysqli_fetch_array($q))
 							{
-								$qw = mysqli_query($con,"SELECT purchasePrice from rates WHERE pName= '$Prod' AND spName='$subType' ORDER BY rtID DESC LIMIT 1 ")or die(mysqli_query());	
+								$qw = mysqli_query($con,"SELECT purchasePrice from rates WHERE pName= '$Prod' AND spName='$subType' ORDER BY rtID DESC LIMIT 1 ")or die(mysqli_error($con));	
 								$rtw=mysqli_fetch_array($qw);
 								$rtw=$r['purchasePrice'];
 									$qt2=0;		$rt2=0;
@@ -289,7 +289,7 @@ $cardPL = $Data['sum(csProLoss)'];
 					
 					}
 // Getting Collection Amount
-							$q = mysqli_query($con,"SELECT sum(rpAmnt) from receiptpayment WHERE rpFor='$Prod' AND rpStatus='ReceivedFrom' AND rpDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_query());	
+							$q = mysqli_query($con,"SELECT sum(rpAmnt) from receiptpayment WHERE rpFor='$Prod' AND rpStatus='ReceivedFrom' AND rpDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_error($con));	
 							$d=mysqli_fetch_array($q);
 							$colSum=$d['sum(rpAmnt)'];
 						
@@ -330,17 +330,17 @@ $cardPL = $Data['sum(csProLoss)'];
 
 												$opQtySum=0;	$opAmntSum=0;	$pQtySum=0;	$pAmntSum=0; $sQtySum=0; $sAmntSum=0;	$cQtySum=0;	$cAmntSum=0;	$colSum=0;
 													$opTotAmnt=0; $proLoss=0;
-													$sql = mysqli_query($con,"SELECT typeName FROM types WHERE productName='Mobile'")or die(mysqli_query());
+													$sql = mysqli_query($con,"SELECT typeName FROM types WHERE productName='Mobile'")or die(mysqli_error($con));
 													WHILE($Data=mysqli_fetch_array($sql))
 														{
 															$subType=$Data['typeName'];
 														// getting opening stock
-																$q = mysqli_query($con,"SELECT * from openingclosing WHERE ocType= 'Mobile' AND oMonth='$CurrentMonth' AND ocEmp='$subType' ORDER BY ocID DESC LIMIT 1 ")or die(mysqli_query());	
+																$q = mysqli_query($con,"SELECT * from openingclosing WHERE ocType= 'Mobile' AND oMonth='$CurrentMonth' AND ocEmp='$subType' ORDER BY ocID DESC LIMIT 1 ")or die(mysqli_error($con));	
 																$d=mysqli_fetch_array($q);
 									/* OPENING Qty 			$open=$d['ocAmnt'];
 									
 														// getting purchase price
-																$q = mysqli_query($con,"SELECT purchasePrice from rates WHERE pName= 'Mobile' AND spName='$subType' ORDER BY rtID DESC LIMIT 1 ")or die(mysqli_query());	
+																$q = mysqli_query($con,"SELECT purchasePrice from rates WHERE pName= 'Mobile' AND spName='$subType' ORDER BY rtID DESC LIMIT 1 ")or die(mysqli_error($con));	
 																$r=mysqli_fetch_array($q);
 																$rt1=$r['purchasePrice'];
 																
@@ -350,7 +350,7 @@ $cardPL = $Data['sum(csProLoss)'];
 																
 									
 														// getting purchases during current month
-																$q = mysqli_query($con,"SELECT sum(qty) from tbl_product_stock WHERE pSubType='$subType' AND trtype='Received' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_query());	
+																$q = mysqli_query($con,"SELECT sum(qty) from tbl_product_stock WHERE pSubType='$subType' AND trtype='Received' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_error($con));	
 																$d=mysqli_fetch_array($q);
 																$purchz=$d['sum(qty)'];
 									/*2 PURCHASES AMNT 		$prAmnt=$purchz*$rt1;
@@ -359,7 +359,7 @@ $cardPL = $Data['sum(csProLoss)'];
 														// getting sale quantity, sale rate and sale amount		
 																		
 																		$total=0;																		
-																$q = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_query());	
+																$q = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_error($con));	
 																	WHILE($d=mysqli_fetch_array($q))
 																	{
 																		$sum=0;
@@ -390,12 +390,12 @@ $cardPL = $Data['sum(csProLoss)'];
 
 								// Getting Cost of Sales-stock
 																	$saleCost=0; $counter=0;
-																	$q = mysqli_query($con,"SELECT pSubType, sum(qty) from tbl_product_stock WHERE pName='Mobile' AND trtype='Sent' AND sDate BETWEEN '$QueryFD' AND '$QueryLD' GROUP BY pSubType ")or die(mysqli_query());	
+																	$q = mysqli_query($con,"SELECT pSubType, sum(qty) from tbl_product_stock WHERE pName='Mobile' AND trtype='Sent' AND sDate BETWEEN '$QueryFD' AND '$QueryLD' GROUP BY pSubType ")or die(mysqli_error($con));	
 																	WHILE($d=mysqli_fetch_array($q))
 																	{
 																		$sTp=$d['pSubType'];
 																		$slQty=$d['sum(qty)'];
-																		$q2 = mysqli_query($con,"SELECT purchasePrice from rates WHERE pName= 'Mobile' AND spName='$sTp' ORDER BY rtID DESC LIMIT 1 ")or die(mysqli_query());	
+																		$q2 = mysqli_query($con,"SELECT purchasePrice from rates WHERE pName= 'Mobile' AND spName='$sTp' ORDER BY rtID DESC LIMIT 1 ")or die(mysqli_error($con));	
 																		$r=mysqli_fetch_array($q2);
 																		$rt1=$r['purchasePrice'];
 									/* SALES COST 					$saleCost=$saleCost+($slQty * $rt1);
@@ -418,24 +418,24 @@ $cardPL = $Data['sum(csProLoss)'];
 					$sumAllOpenCost=0;	$sumAllPrCost=0;	$sumOpPrCost=0;	$sumTotSale=0;	$sumSaleCost=0;	$totalRemInvestSim=0;	
 					
 					
-					$sql = mysqli_query($con,"SELECT typeName FROM types WHERE productName='$Prod' ")or die(mysqli_query());
+					$sql = mysqli_query($con,"SELECT typeName FROM types WHERE productName='$Prod' ")or die(mysqli_error($con));
 					WHILE($Data=mysqli_fetch_array($sql))
 					{
 						$open=0;
 						
 						$subType=$Data['typeName'];
 					// getting purchase price
-							$q = mysqli_query($con,"SELECT purchasePrice from rates WHERE pName= '$Prod' AND spName='$subType' ORDER BY rtID DESC LIMIT 1 ")or die(mysqli_query());	
+							$q = mysqli_query($con,"SELECT purchasePrice from rates WHERE pName= '$Prod' AND spName='$subType' ORDER BY rtID DESC LIMIT 1 ")or die(mysqli_error($con));	
 							$r=mysqli_fetch_array($q);
 						$rt1=$r['purchasePrice'];
 					
 					// getting opening stock
-							$q = mysqli_query($con,"SELECT * from openingclosing WHERE ocType= '$Prod' AND oMonth='$CurrentMonth' AND ocEmp='$subType' ORDER BY ocID DESC LIMIT 1 ")or die(mysqli_query());	
+							$q = mysqli_query($con,"SELECT * from openingclosing WHERE ocType= '$Prod' AND oMonth='$CurrentMonth' AND ocEmp='$subType' ORDER BY ocID DESC LIMIT 1 ")or die(mysqli_error($con));	
 							$d=mysqli_fetch_array($q);
 						$open=$d['ocAmnt'];
 					
 					// getting purchases during current month
-							$q = mysqli_query($con,"SELECT sum(qty) from tbl_product_stock WHERE pSubType='$subType' AND trtype='Received' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_query());	
+							$q = mysqli_query($con,"SELECT sum(qty) from tbl_product_stock WHERE pSubType='$subType' AND trtype='Received' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_error($con));	
 							$d=mysqli_fetch_array($q);
 						$purchz=$d['sum(qty)'];
 						
@@ -449,10 +449,10 @@ $cardPL = $Data['sum(csProLoss)'];
 					// getting sale quantity, sale rate and sale amount
 							
 							$slAmnt=0; $Sumqt2=0; $Sumrt2=0; $totSale=0; $cnt=0; $avgrt=0; $saleCost=0;
-							$q = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_query());	
+							$q = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_error($con));	
 							WHILE($d=mysqli_fetch_array($q))
 							{
-								$qw = mysqli_query($con,"SELECT purchasePrice from rates WHERE pName= '$Prod' AND spName='$subType' ORDER BY rtID DESC LIMIT 1 ")or die(mysqli_query());	
+								$qw = mysqli_query($con,"SELECT purchasePrice from rates WHERE pName= '$Prod' AND spName='$subType' ORDER BY rtID DESC LIMIT 1 ")or die(mysqli_error($con));	
 								$rtw=mysqli_fetch_array($qw);
 								$rtw=$r['purchasePrice'];
 									$qt2=0;		$rt2=0;
@@ -471,7 +471,7 @@ $cardPL = $Data['sum(csProLoss)'];
 					
 					}
 // Getting Collection Amount
-							$q = mysqli_query($con,"SELECT sum(rpAmnt) from receiptpayment WHERE rpFor='$Prod' AND rpStatus='ReceivedFrom' AND rpDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_query());	
+							$q = mysqli_query($con,"SELECT sum(rpAmnt) from receiptpayment WHERE rpFor='$Prod' AND rpStatus='ReceivedFrom' AND rpDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_error($con));	
 							$d=mysqli_fetch_array($q);
 							$colSum=$d['sum(rpAmnt)'];
 						
@@ -512,7 +512,7 @@ $cardPL = $Data['sum(csProLoss)'];
 				$Data1=mysqli_fetch_array($qury);
 				$fixedExpenses = $Data1['sum(amnt)'];
 			
-			$sqlexp = mysqli_query($con,"SELECT sum(amnt) FROM regularexp WHERE  type='expense' AND expDate BETWEEN '$QueryFD' AND '$QueryLD'")or die(mysqli_query());
+			$sqlexp = mysqli_query($con,"SELECT sum(amnt) FROM regularexp WHERE  type='expense' AND expDate BETWEEN '$QueryFD' AND '$QueryLD'")or die(mysqli_error($con));
 				$Dataexp=mysqli_fetch_array($sqlexp);
 				$regularExpenses=$Dataexp['sum(amnt)'];
 
@@ -600,7 +600,7 @@ $cardPL = $Data['sum(csProLoss)'];
 				}
 $ThisMonthsalary=$sumGrossSal;
 	
-	//$qu = mysqli_query($con,"SELECT sum(amnt) from incomeexp WHERE type='expense' AND status='Paid' AND expDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_query());	
+	//$qu = mysqli_query($con,"SELECT sum(amnt) from incomeexp WHERE type='expense' AND status='Paid' AND expDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_error($con));	
 	//	$d=mysqli_fetch_array($qu);
 //$ThisMonthExp=$d['sum(amnt)'];	
 
@@ -611,7 +611,7 @@ $accountPayable=$salExp;
 	
 	/*
 	
-	$qu1 = mysqli_query($con,"SELECT sum(amnt) from incomeexp WHERE type='expense' AND expDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_query());	
+	$qu1 = mysqli_query($con,"SELECT sum(amnt) from incomeexp WHERE type='expense' AND expDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_error($con));	
 		$d1=mysqli_fetch_array($qu1);
 	$ThisMonthExp=$d1['sum(amnt)'];	
 
@@ -636,7 +636,7 @@ $accountPayable=$salExp;
 	/*-----<<<<<<<<<<<<<      Bank Closing      >>>>>>>>>>>>-----*/
 	$NameHere=$defaultBankName;
 	//echo "<br /><br /><br />".$NameHere;
-			$sq6 = mysqli_query($con,"SELECT ocAmnt FROM openingclosing where oMonth='$CurrentMonth' AND ocType='Cash' AND ocEmp='$NameHere'  ")or die(mysqli_query());
+			$sq6 = mysqli_query($con,"SELECT ocAmnt FROM openingclosing where oMonth='$CurrentMonth' AND ocType='Cash' AND ocEmp='$NameHere'  ")or die(mysqli_error($con));
 													$Data6=mysqli_fetch_array($sq6);
 													
 													$Opening=$Data6['ocAmnt'];
@@ -764,12 +764,12 @@ $DefaulterDueClosing=$DefaulterDueOpening+$DefaulterDueGiven-$DefaulterDueTaken;
 							$receivable= $load+$mfsClose+$csamount+$opening;		
 					// calculating mobile sold to emp
 							$sAmntSum0=0;
-							$sq6 = mysqli_query($con,"SELECT typeName FROM types WHERE productName='Mobile'")or die(mysqli_query());
+							$sq6 = mysqli_query($con,"SELECT typeName FROM types WHERE productName='Mobile'")or die(mysqli_error($con));
 								WHILE($Data6=mysqli_fetch_array($sq6))
 								{
 									$subType=$Data6['typeName'];
 									$slAmnt=0; $qt2=0; $rt2=0; $sumQt=0;
-									$q7 = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND customer='$Employee' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_query());	
+									$q7 = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND customer='$Employee' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_error($con));	
 									WHILE($d7=mysqli_fetch_array($q7))
 									{
 										$qt2=$d7['qty'];
@@ -783,12 +783,12 @@ $DefaulterDueClosing=$DefaulterDueOpening+$DefaulterDueGiven-$DefaulterDueTaken;
 					
 					// calculating Sim sold to emp
 							$sAmntSum1=0;
-							$sq8 = mysqli_query($con,"SELECT typeName FROM types WHERE productName='SIM'")or die(mysqli_query());
+							$sq8 = mysqli_query($con,"SELECT typeName FROM types WHERE productName='SIM'")or die(mysqli_error($con));
 								WHILE($Data8=mysqli_fetch_array($sq8))
 								{
 									$subType=$Data8['typeName'];
 									$slAmnt=0; $qt2=0; $rt2=0; $sumQt=0;
-									$q9 = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND customer='$Employee' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_query());	
+									$q9 = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND customer='$Employee' AND sDate BETWEEN '$QueryFD' AND '$QueryLD'  ")or die(mysqli_error($con));	
 									WHILE($d9=mysqli_fetch_array($q9))
 									{
 										$qt2=$d9['qty'];
@@ -927,16 +927,16 @@ $DefaulterDueClosing=$DefaulterDueOpening+$DefaulterDueGiven-$DefaulterDueTaken;
 /*-----<<<<<<<<<<<<<      investment MODULE      >>>>>>>>>>>>-----*/			
 			
 	// Opening investment for the month	
-			$sqi = mysqli_query($con,"SELECT ocAmnt FROM openingclosing WHERE oMonth='$CurrentMonth' AND ocType='investment' ")or die(mysqli_query());
+			$sqi = mysqli_query($con,"SELECT ocAmnt FROM openingclosing WHERE oMonth='$CurrentMonth' AND ocType='investment' ")or die(mysqli_error($con));
 				$Datai=mysqli_fetch_array($sqi);
 				$initialInvest=$Datai['ocAmnt'];
 				
 	// This Month investment
-			$sqc = mysqli_query($con,"SELECT sum(amnt) FROM investment WHERE type='Invest' AND date BETWEEN '$QueryFD' AND '$QueryLD' ")or die(mysqli_query());
+			$sqc = mysqli_query($con,"SELECT sum(amnt) FROM investment WHERE type='Invest' AND date BETWEEN '$QueryFD' AND '$QueryLD' ")or die(mysqli_error($con));
 				$Datac=mysqli_fetch_array($sqc);
 				$currentInvest=$Datac['sum(amnt)'];
 	// This Month Withdraw
-			$sqw = mysqli_query($con,"SELECT sum(amnt) FROM investment WHERE type='Withdraw' AND date BETWEEN '$QueryFD' AND '$QueryLD' ")or die(mysqli_query());
+			$sqw = mysqli_query($con,"SELECT sum(amnt) FROM investment WHERE type='Withdraw' AND date BETWEEN '$QueryFD' AND '$QueryLD' ")or die(mysqli_error($con));
 				$Dataw=mysqli_fetch_array($sqw);
 				$currentWithdraw=$Dataw['sum(amnt)'];
 	// Curent investment
@@ -962,20 +962,20 @@ $DefaulterDueClosing=$DefaulterDueOpening+$DefaulterDueGiven-$DefaulterDueTaken;
 									$month = date('m');
 									$date = mktime( 0, 0, 0, $month, 1, $year );
 									$preMonth=strftime( '%b-%Y', strtotime( '-1 month', $date ));
-			$sq = mysqli_query($con,"SELECT sum(netSal) FROM salary WHERE empName!='Profit' AND status='Pending' AND salMonth='$preMonth' ")or die(mysqli_query());
+			$sq = mysqli_query($con,"SELECT sum(netSal) FROM salary WHERE empName!='Profit' AND status='Pending' AND salMonth='$preMonth' ")or die(mysqli_error($con));
 				$Datac=mysqli_fetch_array($sq);
 				$pendingSalaries=$Datac['sum(netSal)'];
-			/*$sq2 = mysqli_query($con,"SELECT sum(netSal) FROM salary WHERE empName='Profit' AND status='Pending' AND salMonth='$preMonth' ")or die(mysqli_query());
+			/*$sq2 = mysqli_query($con,"SELECT sum(netSal) FROM salary WHERE empName='Profit' AND status='Pending' AND salMonth='$preMonth' ")or die(mysqli_error($con));
 				$Da=mysqli_fetch_array($sq2);
 				$pendingProfit=$Da['sum(netSal)'];*/
-			$sq22 = mysqli_query($con,"SELECT sum(amnt) FROM dueexp WHERE expMonth='$preMonth' AND status='Pending' ")or die(mysqli_query());
+			$sq22 = mysqli_query($con,"SELECT sum(amnt) FROM dueexp WHERE expMonth='$preMonth' AND status='Pending' ")or die(mysqli_error($con));
 				$Datac22=mysqli_fetch_array($sq22);
 				$pendingExpenses=$Datac22['sum(amnt)'];
 				
 				
 				$pendSalExp=$pendingSalaries+$pendingExpenses;
 				
-												$sq5 = mysqli_query($con,"SELECT ocAmnt FROM openingclosing where oMonth='$CurrentMonth' AND ocType='Profit' AND ocEmp='Franchise'  ")or die(mysqli_query());
+												$sq5 = mysqli_query($con,"SELECT ocAmnt FROM openingclosing where oMonth='$CurrentMonth' AND ocType='Profit' AND ocEmp='Franchise'  ")or die(mysqli_error($con));
 													$Data5=mysqli_fetch_array($sq5);
 													$OpeningProfit=$Data5['ocAmnt'];
 												$q=mysqli_query($con,"SELECT sum(rpAmnt) FROM receiptpayment WHERE rpFor='ProfitAdd' AND rpStatus='ReceivedFrom' AND rpFromTo='ProfitAdd' AND rpDate BETWEEN $QueryFD AND $QueryLD");

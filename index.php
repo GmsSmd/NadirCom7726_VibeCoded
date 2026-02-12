@@ -1,36 +1,62 @@
 <?php
 include_once('login.php');
 ?>
-<!doctype HTML>
-<html>
-	<head>
-		<title>Login</title>
-		<style> 
-		<?php include_once('admin/styles/loginstyle.css'); ?>
-		</style>
-	</head>
+<?php
+$pageTitle = 'Login';
+ob_start();
+?>
+<div class="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg border border-gray-100">
+        <div>
+            <!-- Ensure image path is correct, falling back to text if broken -->
+            <img class="mx-auto h-24 w-auto object-contain" src="admin/resources/jazznew.PNG" alt="Jazz Logo" onerror="this.style.display='none'">
+            <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900 tracking-tight">
+                Franchise Management System
+            </h2>
+            <p class="mt-2 text-center text-sm text-gray-600">
+                Sign in to your account
+            </p>
+        </div>
+        
+        <form class="mt-8 space-y-6" action="" method="POST">
+            <div class="rounded-md shadow-sm -space-y-px">
+                <div class="mb-4">
+                    <label for="username" class="sr-only">User Name</label>
+                    <input id="username" name="username" type="text" autocomplete="username" required 
+                        class="appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm transition duration-200" 
+                        placeholder="User Name">
+                </div>
+                <div>
+                    <label for="password" class="sr-only">Password</label>
+                    <input id="password" name="password" type="password" autocomplete="current-password" required 
+                        class="appearance-none rounded-lg relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm transition duration-200" 
+                        placeholder="Password">
+                </div>
+            </div>
 
-	<body>
-	<br/>
-			<div class="app">
-				<div class="bar">
-					<h2>Welcome to Franchise Management System</h2>
-				</div>
-				<div class="img">
-					 <img src="admin/resources/jazznew.PNG" alt="FMS" width="200" height="150"/>
-				</div>
-				<form id="form1" method="POST" action="">
-					
-					<input id="name" name="username" placeholder="Enter User Name" type="text"/>
-					<br>
-					
-					<input id="password" name="password" placeholder="Enter Password" type="password"/><br>
-					<input name="submit" type="submit" value=" Login " />
-					
-					<div>
-					<h2><?php echo $error; ?></h2>
-				</div>
-				</form>
-			</div>
-	</body>
-</html>
+            <?php if (!empty($error)): ?>
+                <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded text-red-700 text-sm">
+                    <p class="font-medium">Error</p>
+                    <p><?php echo htmlspecialchars($error); ?></p>
+                </div>
+            <?php endif; ?>
+
+            <div>
+                <button type="submit" name="submit" 
+                    class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition duration-200 transform hover:scale-[1.02]">
+                    <span class="absolute left-0 inset-y-0 flex items-center pl-3">
+                        <!-- Heroicon name: solid/lock-closed -->
+                        <svg class="h-5 w-5 text-blue-300 group-hover:text-blue-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                        </svg>
+                    </span>
+                    Sign in
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+<?php
+$content = ob_get_clean();
+include 'layouts/main_layout.php';
+?>

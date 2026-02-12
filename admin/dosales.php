@@ -2,9 +2,9 @@
 include_once('../session.php');
 //include_once('includes/dbcon.php');
 //global $con;
-$Employee = $_GET['name'];
+$Employee = mysqli_real_escape_string($con, $_GET['name']);
 if(isset($_GET['num']))
-    $lineNumber=$_GET['num'];
+    $lineNumber = mysqli_real_escape_string($con, $_GET['num']);
 else
     $lineNumber='';
 include_once('includes/doformula.php');
@@ -54,13 +54,17 @@ include_once('includes/globalvar.php');
 									$count=$count+1;
 									$takenCardsAmunt=0;
 										$Dat=date("Y-m-d", $i);
-												$q1=mysqli_query($con,"SELECT sum(loadAmnt),sum(loadTransfer), sum(loadProfit), sum(loadExcessProfit) FROM tbl_mobile_load WHERE loadStatus='Sent' AND loadEmp='$Employee' AND loadDate ='$Dat' ");
-												$Data1=mysqli_fetch_array($q1);
-										$load= $Data1['sum(loadAmnt)'];
+                                        // Refactored to use LoadService
+                                        if (!isset($loadService)) {
+                                            $loadService = new \App\Services\LoadService();
+                                        }
+                                        $loadStats = $loadService->getLoadStats($Employee, $Dat);
+                                        
+										$load= $loadStats['total_load'] ?? 0;
 									
-										$transfer= $Data1['sum(loadTransfer)'];
-										$Profit= $Data1['sum(loadProfit)'];
-										$XsProfit=$Data1['sum(loadExcessProfit)'];
+										$transfer= $loadStats['total_transfer'] ?? 0;
+										$Profit= $loadStats['total_profit'] ?? 0;
+										$XsProfit= $loadStats['total_excess_profit'] ?? 0;
 												$q2=mysqli_query($con,"SELECT sum(mfsAmnt) FROM tbl_financial_service WHERE mfsStatus='Sent' AND mfsEmp='$Employee' AND mfsDate ='$Dat' ");
 												$Data2=mysqli_fetch_array($q2);
 										$mfsSend= $Data2['sum(mfsAmnt)'];
@@ -280,7 +284,7 @@ include_once('includes/globalvar.php');
 							<center>
 								<caption> <h2>
 								<?php
-								echo $Employee."'s ";
+								echo htmlspecialchars($Employee, ENT_QUOTES, 'UTF-8')."'s ";
 								?>
 								Sales Sheet</h2></caption>
 							</center>
@@ -299,9 +303,9 @@ include_once('includes/globalvar.php');
 												$nm='doLink';
 											?>
 											<!-- <a href="do.php?name=<?php echo $name;?>" id="<?php echo $nm;?>" class="button"> -->
-											<a href="dosales.php?name=<?php echo $name;?>&num=<?php echo $lineNum;?>" id="<?php echo $nm;?>" class="button">
+											<a href="dosales.php?name=<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8');?>&num=<?php echo htmlspecialchars($lineNum, ENT_QUOTES, 'UTF-8');?>" id="<?php echo $nm;?>" class="button">
 											<?php
-											echo $data['EmpName']."</a>";
+											echo htmlspecialchars($data['EmpName'], ENT_QUOTES, 'UTF-8')."</a>";
 										}
 										
 								?>

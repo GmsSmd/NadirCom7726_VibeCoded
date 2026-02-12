@@ -1,6 +1,6 @@
 <?php
-//$con=mysqli_connect("localhost","inforticks_sdadmin","#A_+T?m%Z-B0","inforticks_NadirCom7726");		//On Server efmiscom_rawat_primary
-$con=mysqli_connect("localhost","root","","nadircom7726");		//Localhost
+require_once __DIR__ . '/../../config.php';
+$con = mysqli_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 /*
 if (mysqli_connect_errno()) {
   echo "Failed to connect to MySQL: " . mysqli_connect_error();
