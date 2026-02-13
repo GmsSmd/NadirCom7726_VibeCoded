@@ -50,4 +50,20 @@ class Database {
         $stmt->execute($params);
         return $stmt;
     }
+
+    public function lastInsertId() {
+        return $this->pdo->lastInsertId();
+    }
+
+    public function beginTransaction() {
+        return $this->pdo->beginTransaction();
+    }
+
+    public function commit() {
+        return $this->pdo->commit();
+    }
+
+    public function rollBack() {
+        return $this->pdo->rollBack();
+    }
 }

@@ -1,831 +1,426 @@
 <?php
-include_once('../session.php');
-//include_once('includes/dbcon.php');
-//global $con;
-$Employee = mysqli_real_escape_string($con, $_GET['name']);
-if(isset($_GET['num']))
-    $lineNumber = mysqli_real_escape_string($con, $_GET['num']);
-else
-    $lineNumber='';
-include_once('includes/doformula.php');
-include_once('includes/globalvar.php');
-//echo "<br><br><br>";
+// Modernized dosales.php
+session_start();
+require_once __DIR__ . '/../config.php'; // Include global config (which includes src/autoload.php)
+// If config.php is not used, use this:
+// require_once __DIR__ . '/../src/autoload.php';
+
+// Authentication Check (from legacy session.php)
+if(!isset($_SESSION['login_user'])){
+    header("location: ../login.php");
+    exit();
+}
+
+Use App\Services\SalesService;
+Use App\Services\LoadService;
+
+// Initialize Services
+$salesService = new SalesService();
+$loadService = new LoadService();
+
+// Handle Legacy Includes for variables and form processing
+// We keep this temporarily to handle the POST logic without rewriting it all immediately.
+// Note: doformula.php relies on global $con, so we need to ensure it's available or mocked if we want to remove it.
+// For now, let's replicate the necessary global variables.
+include_once('includes/dbcon.php'); // Provides $con
+include_once('includes/variables.php'); // Provides dates, user info
+include_once('includes/globalvar.php'); // Provides helper functions
+include_once('includes/doformula.php'); // Processes POST requests
+
+// Get Current Employee
+$employeeName = mysqli_real_escape_string($con, $_GET['name'] ?? '');
+if (empty($employeeName)) {
+    // Default or Error
+    $employeeName = 'Select DO';
+}
+
+$lineNumber = mysqli_real_escape_string($con, $_GET['num'] ?? '');
+
+// Calculate Date Range (from globalvar/variables logic)
+// $date_from and $date_to are set in variables.php
+// $QueryFD, $QueryLD, $CurrentMonth, $dateNow are also set there.
+
+// Fetch Data for the Report
+$reportData = [];
+$totals = [
+    'load' => 0, 'transfer' => 0, 'profit' => 0,
+    'mfsSend' => 0, 'mfsReceive' => 0, 'mfsClose' => 0,
+    'taken' => 0, 'receivable' => 0, 'closing' => 0,
+    'cardReceivables' => 0, 'mobileClose' => 0, 'simClose' => 0
+];
+
+// Initial Opening Balances
+$openingCash = $salesService->getOpeningBalance($employeeName, $CurrentMonth, 'Cash');
+$openingCard = $salesService->getOpeningBalance($employeeName, $CurrentMonth, 'Card');
+$openingMobile = $salesService->getOpeningBalance($employeeName, $CurrentMonth, 'Mobile');
+$openingSIM = $salesService->getOpeningBalance($employeeName, $CurrentMonth, 'SIM');
+
+$currentOpening = $openingCash;
+$currentOpeningCard = $openingCard;
+
+// Loop through days
+for ($i = $date_from; $i <= $date_to; $i += 86400) {
+    $currentDate = date("Y-m-d", $i);
+    $displayDate = date("d-m-Y", $i);
+
+    // 1. Mobile Load Stats
+    $loadStats = $loadService->getLoadStats($employeeName, $currentDate);
+    $load = $loadStats['total_load'] ?? 0;
+    $transfer = $loadStats['total_transfer'] ?? 0;
+    $profit = ($loadStats['total_profit'] ?? 0) + ($loadStats['total_excess_profit'] ?? 0);
+
+    // 2. MFS Stats
+    $mfsStats = $salesService->getMfsStats($employeeName, $currentDate);
+    $mfsSend = $mfsStats['sent'];
+    $mfsReceive = $mfsStats['received'];
+    $mfsClose = $mfsStats['close'];
+
+    // 3. Card Stats (Profit/Loss not shown in table body but used in logic)
+    $cardStats = $salesService->getCardStats($employeeName, $currentDate);
+    $cardTotalAmount = $cardStats['total_amount'] ?? 0;
+
+    // 4. Receivables Calculation
+    $receivable = $currentOpening + $load + $mfsClose;
+    $cardReceivable = $currentOpeningCard + $cardTotalAmount;
+
+    // 5. Payments Received (Taken)
+    $takenLMC = $salesService->getReceivedPayments($employeeName, $currentDate, 'LMC');
+    $takenCard = $salesService->getReceivedPayments($employeeName, $currentDate, 'Card');
+    
+    // 6. Dues (Closing for the day)
+    $dues = $receivable - $takenLMC;
+    $cardReceivable -= $takenCard;
+
+    // 7. Store Data
+    $reportData[] = [
+        'date' => $displayDate,
+        'load' => $load,
+        'transfer' => $transfer,
+        'profit' => $profit,
+        'mfsSend' => $mfsSend,
+        'mfsReceive' => $mfsReceive,
+        'opening' => $currentOpening,
+        'receivable' => $receivable,
+        'taken' => $takenLMC,
+        'dues' => $dues,
+        'cardReceivable' => $cardReceivable
+    ];
+
+    // Aggregate Totals
+    $totals['load'] += $load;
+    $totals['transfer'] += $transfer;
+    $totals['profit'] += $profit;
+    $totals['mfsSend'] += $mfsSend;
+    $totals['mfsReceive'] += $mfsReceive;
+    $totals['taken'] += $takenLMC;
+
+    // Set Opening for next day
+    $currentOpening = $dues;
+    $currentOpeningCard = $cardReceivable;
+}
+
+// Final Closing Calculations for Mobile and SIM
+// Mobile
+$sumMobileSales = $salesService->getProductSalesSum($employeeName, $QueryFD, $CurrentDate, 'Mobile');
+$takenMobile = $salesService->getReceivedPaymentsRange($employeeName, $QueryFD, $CurrentDate, 'mobile');
+$mobileClose = ($openingMobile + $sumMobileSales) - $takenMobile;
+
+// SIM
+$sumSIMSales = $salesService->getProductSalesSum($employeeName, $QueryFD, $CurrentDate, 'SIM');
+$takenSIM = $salesService->getReceivedPaymentsRange($employeeName, $QueryFD, $CurrentDate, 'SIM');
+$simClose = ($openingSIM + $sumSIMSales) - $takenSIM;
+
+// Final Card Closing
+// Logic in dosales.php seems to use the running total result
+$finalCardClose = $currentOpeningCard;
+
+// Profitability (Admin Only)
+$showProfitability = ($currentUserType == 'Admin');
+if ($showProfitability) {
+    $mobileProfit = $salesService->getProductProfitLoss($employeeName, 'Mobile', $QueryFD, $CurrentDate);
+    $simProfit = $salesService->getProductProfitLoss($employeeName, 'SIM', $QueryFD, $CurrentDate);
+    
+    // Card Profit needs to be calculated similarly or summed from daily stats
+    // dosales.php sums sumProLoss from query.
+    // I should add this efficiently.
+    // Ideally, I'd query the range sum directly.
+    $sqlCardProfit = "SELECT sum(csProLoss) as pl FROM tbl_cards WHERE csStatus='Sent' AND csEmp='$employeeName' AND csDate BETWEEN '$QueryFD' AND '$CurrentDate'";
+    $resCardPl = mysqli_query($con, $sqlCardProfit); // Using raw query for speed/legacy match
+    $cardProfit = mysqli_fetch_assoc($resCardPl)['pl'] ?? 0;
+
+    $netProfit = $totals['profit'] + $cardProfit + $mobileProfit + $simProfit;
+}
+
 ?>
-	<head>
-		<title>Sales Sheet</title>
-			<style>
-			<?php
-				include_once('styles/navbarstyle.php');
-				include_once('styles/tablestyle.php');
-				include_once('includes/navbar.php');
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Sheet - <?php echo htmlspecialchars($employeeName); ?></title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for table */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555; 
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-slate-800 font-sans">
+    
+    <!-- Navbar Component -->
+    <nav class="bg-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                         <span class="font-bold text-xl text-indigo-600">NadirCom</span>
+                    </div>
+                </div>
+                <!-- Legacy Navbar Include (might need styling adjustments) -->
+                 <div class="hidden md:flex items-center space-x-4">
+                    <a href="../admin/summary.php" class="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">Summary</a>
+                    <a href="../admin/dosales.php?name=DO" class="text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">Sales</a>
+                    <a href="../logout.php" class="text-red-500 hover:text-red-700 px-3 py-2 rounded-md text-sm font-medium">Logout</a>
+                 </div>
+            </div>
+        </div>
+    </nav>
 
-				////////////////SALES Details////////////////
-				$stringToPrint='';
-				{
-								$EmpOpening=mysqli_query($con,"SELECT sum(ocAmnt) From openingclosing WHERE ocEmp='$Employee' AND oMonth='$CurrentMonth' AND ocType='Cash' ");
-								$Data=mysqli_fetch_array($EmpOpening);
-								$opening = $Data['sum(ocAmnt)'];
-								$open=$opening;
-								
-				// Card Opening		
-								
-								$EmpOpeningCard=mysqli_query($con,"SELECT sum(ocAmnt) From openingclosing WHERE ocEmp='$Employee' AND oMonth='$CurrentMonth' AND ocType='Card' ");
-								$DataCard=mysqli_fetch_array($EmpOpeningCard);
-								$openingCard = $DataCard['sum(ocAmnt)'];
-								$openCard=$openingCard;
-								//echo "<br><br><br>".$openCard;
-								
-						/*///////////////<<<<<<<<<<<   Mobile and SIM   >>>>>>>>>>>>>>>//////////////////*/
-								$MobileCashOpening=mysqli_query($con,"SELECT ocAmnt From openingclosing WHERE ocEmp='$Employee' AND oMonth='$CurrentMonth' AND ocType='Mobile'  ");
-								$Data02=mysqli_fetch_array($MobileCashOpening);
-									$openMobileCash = $Data02['ocAmnt'];
-								$SIMCashOpening=mysqli_query($con,"SELECT ocAmnt From openingclosing WHERE ocEmp='$Employee' AND oMonth='$CurrentMonth' AND ocType='SIM'  ");
-								$Data03=mysqli_fetch_array($SIMCashOpening);
-									$openSIMCash = $Data03['ocAmnt'];
-						/*///////////////<<<<<<<<<<<   Mobile and SIM   >>>>>>>>>>>>>>>//////////////////*/
-								
-								
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        
+        <!-- Header -->
+        <div class="mb-6 flex flex-col md:flex-row justify-between items-center">
+            <h1 class="text-3xl font-bold text-gray-900">
+                <?php echo htmlspecialchars($employeeName); ?>'s Sales Sheet
+            </h1>
+            <div class="mt-4 md:mt-0 flex space-x-2 overflow-x-auto pb-2">
+                <?php
+                $activeEmployees = $salesService->getActiveEmployees();
+                foreach($activeEmployees as $emp) {
+                    $isActive = ($emp['EmpName'] == $employeeName) ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-100';
+                    echo '<a href="dosales.php?name='.urlencode($emp['EmpName']).'&num='.urlencode($emp['doLine']).'" 
+                             class="px-4 py-2 rounded-full shadow-sm text-sm font-semibold transition-colors duration-200 border border-gray-200 ' . $isActive . '">
+                             '.htmlspecialchars($emp['EmpName']).'
+                          </a>';
+                }
+                ?>
+            </div>
+        </div>
 
-								$count=0; $sumLoad=0;	$sumTransfer=0;	$sumProfit=0; $sumSend=0; $sumReceive=0; $sumClose=0; $sumQty=0; $sumOrgAmnt=0; $sumSaleRate=0; $sumAmnt=0; $sumProLoss=0; $amount=0;
-								$sumReceivable=0; $sumTaken=0;
-							
-								for($i=$date_from; $i<=$date_to; $i+=86400)
-									{
-									$count=$count+1;
-									$takenCardsAmunt=0;
-										$Dat=date("Y-m-d", $i);
-                                        // Refactored to use LoadService
-                                        if (!isset($loadService)) {
-                                            $loadService = new \App\Services\LoadService();
-                                        }
-                                        $loadStats = $loadService->getLoadStats($Employee, $Dat);
-                                        
-										$load= $loadStats['total_load'] ?? 0;
-									
-										$transfer= $loadStats['total_transfer'] ?? 0;
-										$Profit= $loadStats['total_profit'] ?? 0;
-										$XsProfit= $loadStats['total_excess_profit'] ?? 0;
-												$q2=mysqli_query($con,"SELECT sum(mfsAmnt) FROM tbl_financial_service WHERE mfsStatus='Sent' AND mfsEmp='$Employee' AND mfsDate ='$Dat' ");
-												$Data2=mysqli_fetch_array($q2);
-										$mfsSend= $Data2['sum(mfsAmnt)'];
-												$q3=mysqli_query($con,"SELECT sum(mfsAmnt) FROM tbl_financial_service WHERE mfsStatus='Received' AND mfsEmp='$Employee' AND mfsDate ='$Dat' ");
-												$Data3=mysqli_fetch_array($q3);
-										$mfsReceive = $Data3['sum(mfsAmnt)'];
-										$mfsClose = $mfsSend-$mfsReceive;
-												$q4=mysqli_query($con,"SELECT sum(csQty), sum(csOrgAmnt), sum(csTotalAmnt), avg(csRate), sum(csProLoss) FROM tbl_cards WHERE csStatus='Sent' AND csEmp='$Employee' AND csDate ='$Dat' ");
-												$Data4=mysqli_fetch_array($q4);
-										$cardQty = $Data4['sum(csQty)'];
-										$orgAmnt= $Data4['sum(csOrgAmnt)'];
-										$saleRate= $Data4['avg(csRate)'];
-										$amountCardsSale= $Data4['sum(csTotalAmnt)'];
-										
-										$pL= $Data4['sum(csProLoss)'];
-										
-										$receivable= $opening+$load+$mfsClose;
-										$cardreceivables=$openingCard+$amountCardsSale;
-										//echo "+".$amountCardsSale;
-										//$receivable= $opening+$load+$mfsClose+$amount;
-										$takenCardsAmunt=0;
-												$q5=mysqli_query($con,"SELECT sum(rpAmnt) FROM receiptpayment WHERE rpStatus='ReceivedFrom' AND rpFromTo='$Employee' AND rpDate ='$Dat' AND rpFor='LMC' ");
-												$Data5=mysqli_fetch_array($q5);
-												$taken= $Data5['sum(rpAmnt)'];
-												$dues= $receivable-$taken;
-												$q555=mysqli_query($con,"SELECT sum(rpAmnt) FROM receiptpayment WHERE rpStatus='ReceivedFrom' AND rpFromTo='$Employee' AND rpDate ='$Dat' AND rpFor='Card' ");
-												$Data555=mysqli_fetch_array($q555);
-												$takenCardsAmunt= $Data555['sum(rpAmnt)'];
-										//echo "<br>".$takenCardsAmunt;
-									
-										$cardreceivables=$cardreceivables-$takenCardsAmunt;
-										
-										//echo "<br><br><br>".$cardreceivables;
-					/*///////////////<<<<<<<<<<<   Mobile and SIM Sales   >>>>>>>>>>>>>>>//////////////////*/
-								$sAmntSum0=0;
-									$sq6 = mysqli_query($con,"SELECT typeName FROM types WHERE productName='Mobile'")or die(mysqli_query());
-									WHILE($Data6=mysqli_fetch_array($sq6))
-									{
-										$subType=$Data6['typeName'];
-										$slAmnt=0; $qt2=0; $rt2=0; $sumQt=0;
-										$q7 = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND customer='$Employee' AND sDate BETWEEN '$QueryFD' AND '$Dat'  ")or die(mysqli_query());	
-										WHILE($d7=mysqli_fetch_array($q7))
-										{
-										$qt2=$d7['qty'];
-										$rt2=$d7['rate'];
-										$sumQt=$sumQt+$qt2;
-										$slAmnt=$slAmnt+($qt2*$rt2);
-										}
-										$sAmntSum0=$sAmntSum0+$slAmnt;
-									}
-									$sAmntSum1=0;
-									$sAmntSum2=0;
-									$sq8 = mysqli_query($con,"SELECT typeName FROM types WHERE productName='SIM'")or die(mysqli_query());
-									WHILE($Data8=mysqli_fetch_array($sq8))
-									{
-										$subType=$Data8['typeName'];
-										$slAmnt=0; $qt2=0; $rt2=0; $sumQt=0;
-										$q9 = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND customer='$Employee' AND sDate BETWEEN '$QueryFD' AND '$Dat'  ")or die(mysqli_query());	
-										WHILE($d9=mysqli_fetch_array($q9))
-										{
-											$qt2=$d9['qty'];
-											$rt2=$d9['rate'];
-											$sumQt=$sumQt+$qt2;
-											$slAmnt=$slAmnt+($qt2*$rt2);
-										}
-										$sAmntSum1=$sAmntSum1+$slAmnt;
-									}
-									$sAmntSum11=0;
-									$sq81 = mysqli_query($con,"SELECT typeName FROM types WHERE productName='Card'")or die(mysqli_query());
-									WHILE($Data81=mysqli_fetch_array($sq81))
-									{
-										$subType=$Data81['typeName'];
-										$slAmnt21=0; $qt21=0; $rt21=0; $sumQt21=0;
-										$q91 = mysqli_query($con,"SELECT * from tbl_product_stock WHERE pSubType='$subType' AND trtype='Sent' AND customer='$Employee' AND sDate BETWEEN '$QueryFD' AND '$Dat'  ")or die(mysqli_query());	
-										WHILE($d91=mysqli_fetch_array($q91))
-										{
-											$qt21=$d91['qty'];
-											$rt21=$d91['rate'];
-											$sumQt21=$sumQt21+$qt21;
-											$slAmnt21=$slAmnt21+($qt2*$rt2);
-										}
-										$sAmntSum2=$sAmntSum2+$slAmnt;
-									}
-									$q12=mysqli_query($con,"SELECT sum(rpAmnt) FROM receiptpayment WHERE rpFor ='mobile' AND rpStatus='ReceivedFrom' AND rpFromTo='$Employee' AND rpDate BETWEEN '$QueryFD' AND '$Dat' ");
-									$Data12=mysqli_fetch_array($q12);
-										$takenMbl= $Data12['sum(rpAmnt)'];		
-									$q13=mysqli_query($con,"SELECT sum(rpAmnt) FROM receiptpayment WHERE rpFor ='SIM' AND rpStatus='ReceivedFrom' AND rpFromTo='$Employee' AND rpDate BETWEEN '$QueryFD' AND '$Dat' ");
-										$Data13=mysqli_fetch_array($q13);
-										$takenSIM= $Data13['sum(rpAmnt)'];		
-									$MobileClose=($openMobileCash+$sAmntSum0) - $takenMbl;
-									$SIMClose=($openSIMCash+$sAmntSum1) - $takenSIM;
-									
-									$cardclosenew=($openCard+$sAmntSum2)-$takenCardsAmunt;
-					/*///////////////<<<<<<<<<<<   Mobile and SIM Sales   >>>>>>>>>>>>>>>//////////////////*/
-								// Footer Sums
-										$sumLoad=$sumLoad+$load;
-										$sumTransfer=$sumTransfer+$transfer;
-										$sumProfit=$sumProfit+($Profit+$XsProfit);
-										$sumSend=$sumSend+$mfsSend;
-										$sumReceive=$sumReceive+$mfsReceive;
-										$sumClose=$sumClose+$mfsClose;
-										$sumQty=$sumQty+$cardQty;
-										$sumOrgAmnt=$sumOrgAmnt+$orgAmnt;
-										$sumSaleRate=$sumSaleRate+$saleRate;
-										$sumAmnt=$sumAmnt+$amount;
-										$sumProLoss=$sumProLoss+$pL;
-										$sumTaken=$sumTaken+$taken;
-							$newDate=date("d-m-Y", $i);
-										$stringToPrint=$stringToPrint.'<tr>';
-												$stringToPrint=$stringToPrint.'<td>'.$newDate.'</td>';
-												$stringToPrint=$stringToPrint.'<td><b>'.$load.'</b></td>';
-												$stringToPrint=$stringToPrint.'<td>'.$transfer.'</td>';
-												//$stringToPrint=$stringToPrint.'<!-- <td>'.round($Profit+$XsProfit,2).'</td> -->';
-												$stringToPrint=$stringToPrint.'<td><b>'.$mfsSend.'</b></td>';
-												$stringToPrint=$stringToPrint.'<td><b>'.$mfsReceive.'</b></td>';
-												//$stringToPrint=$stringToPrint.'<!-- <td>'.$mfsClose.'</td> -->';
-												//$stringToPrint=$stringToPrint.'<td>'.$cardQty.'</td>';
-												//$stringToPrint=$stringToPrint.'<!-- <td>'.round($orgAmnt,2).'</td> -->';
-												//$stringToPrint=$stringToPrint.'<td>'.round($saleRate,2).'</td>';
-												//$stringToPrint=$stringToPrint.'<td>'.$amount.'</td>';
-												//$stringToPrint=$stringToPrint.'<!-- <td>'.round($pL,2).'</td> -->';
-												$stringToPrint=$stringToPrint.'<td>'.$opening.'</td>';
-												$stringToPrint=$stringToPrint.'<td>'.$receivable.'</td>';
-												$stringToPrint=$stringToPrint.'<td><b>'.$taken.'</b></td>';
-												if($dues>0)
-														$stringToPrint=$stringToPrint.'<td style=\"color: Red;\"><b>'.$dues.'</b></td>';
-												else if($dues<0)
-														$stringToPrint=$stringToPrint.'<td style=\"color: black;\"><b>'.$dues.'</b></td>';
-												else
-														$stringToPrint=$stringToPrint.'<td style=\"color: black;\"><b>'.$dues.'</b></td>';
-												
-												$stringToPrint=$stringToPrint.'<td style="text-align: right;">'.$cardreceivables.'</td>';
-												$stringToPrint=$stringToPrint.'<td style="text-align: right;">'.$MobileClose.'</td>';
-												$stringToPrint=$stringToPrint.'<td style="text-align: right;">'.$SIMClose.'</td>';
-										$stringToPrint=$stringToPrint.'</tr>';
-										
-										$opening=$dues;
-										$openingCard=$cardreceivables;
-									}
-									$stringLast='';
-									$stringLast=$stringLast.'<tr>';
-												$stringLast=$stringLast.'<td style="background: brown; color: white;">'.$newDate.'</td>';
-												$stringLast=$stringLast.'<td style="background: brown; color: white;"><b>'.$load.'</b></td>';
-												$stringLast=$stringLast.'<td style="background: brown; color: white;">'.$transfer.'</td>';
-												//$stringLast=$stringLast.'<!-- <td>'.round($Profit+$XsProfit,2).'</td> -->';
-												$stringLast=$stringLast.'<td style="background: brown; color: white;"><b>'.$mfsSend.'</b></td>';
-												$stringLast=$stringLast.'<td style="background: brown; color: white;"><b>'.$mfsReceive.'</b></td>';
-												//$stringLast=$stringLast.'<!-- <td>'.$mfsClose.'</td> -->';
-												//$stringLast=$stringLast.'<!-- <td>'.$cardQty.'</td> -->';
-												//$stringLast=$stringLast.'<!-- <td>'.round($orgAmnt,2).'</td> -->';
-												//$stringLast=$stringLast.'<!-- <td>'.round($saleRate,2).'</td> -->';
-												//$stringLast=$stringLast.'<!-- <td>'.$amount.'</td> -->';
-												//$stringLast=$stringLast.'<!-- <td>'.round($pL,2).'</td> -->';
-												$stringLast=$stringLast.'<td style="background: brown; color: white;">'.$opening.'</td>';
-												$stringLast=$stringLast.'<td style="background: brown; color: white;">'.$receivable.'</td>';
-												$stringLast=$stringLast.'<td style="background: brown; color: white;"><b>'.$taken.'</b></td>';
-												if($dues>0)
-														$stringLast=$stringLast.'<td style="background: brown; color: white;"><b>'.$dues.'</b></td>';
-												else if($dues<0)
-														$stringLast=$stringLast.'<td style="background: brown; color: white;"><b>'.$dues.'</b></td>';
-												else
-														$stringLast=$stringLast.'<td style="background: brown; color: white;"><b>'.$dues.'</b></td>';
-												
-												//$stringLast=$stringLast.'<td>'.$amount.'</td>';
-												$stringLast=$stringLast.'<td style="background: green; color: white; text-align: right;">'.$cardreceivables.'</td>';
-												$stringLast=$stringLast.'<td style="background: green; color: white; text-align: right;">'.$MobileClose.'</td>';
-												$stringLast=$stringLast.'<td style="background: green; color: white; text-align: right;">'.$SIMClose.'</td>';
-									$stringLast=$stringLast.'</tr>';
-									$sumReceivable=$sumLoad+$sumClose+$open;
-									$closing=$sumReceivable-$sumTaken;
-									$avgRate=$sumSaleRate/$count;
-				
-				}
-				
-				/////////////Mobile SIM Pro/Loss Calculation///////////////
-				
-				function getPl($empnamehere,$pnamehere)
-				{
-					global $QueryFD;
-					global $Dat;
-					global $con;
-					$forEmp=$empnamehere;
-					$pName=$pnamehere;
-					$AmntSum=0;
-					$QtySum=0;
-					$plSum=0;
-					$sql = mysqli_query($con,"SELECT * FROM tbl_product_stock WHERE trtype='Sent' AND customer='$forEmp' AND pName='$pName' AND sDate BETWEEN '$QueryFD' AND '$Dat' ORDER BY sDate ASC")or die(mysqli_query());
-							WHILE($Data=mysqli_fetch_array($sql))
-							{
-								$Type= $Data['pSubType'];
-								$Qty= $Data['qty'];
-								$rat= $Data['rate'];
-								$Amnt= $Qty*$rat;
-									
-								//getting purchase rate
-								$qry110 = mysqli_query($con,"SELECT purchasePrice FROM rates WHERE pName='$pName' AND spName='$Type' ORDER BY rtID DESC LIMIT 1")or die(mysqli_query());
-                                $Data110=mysqli_fetch_array($qry110);
-                                $PurchaseRate= $Data110['purchasePrice'];
-									
-								$cost=$Qty*$PurchaseRate;
-								$pl=$Amnt-$cost;
-									
-								$AmntSum=$AmntSum + $Amnt;
-								$QtySum=$QtySum+$Qty;
-								
-								$plSum=$plSum+$pl;
-							}
-							return $plSum;
-				}
-				
-				
-			?>
-			
-			</style>
-	</head>
-			<div class="container" align="center" style="border: solid black 0px;" >
-							<center>
-								<caption> <h2>
-								<?php
-								echo htmlspecialchars($Employee, ENT_QUOTES, 'UTF-8')."'s ";
-								?>
-								Sales Sheet</h2></caption>
-							</center>
-						
-							<div style="border: solid black 0px;" align="center" class="doBar">
-								<?php
-									//$doQ=mysqli_query($con,"SELECT EmpName from empinfo WHERE EmpStatus='Active' AND (empType='DO' OR empType='SP' OR empType='ws') Order by sort_order ASC");
-									$doQ=mysqli_query($con,"SELECT * from empinfo WHERE EmpStatus='Active' AND (showIn=1 OR showIn=3) Order by sort_order ASC");
-									while($data=mysqli_fetch_array($doQ))
-										{
-											$name=$data['EmpName'];
-											$lineNum=$data['doLine'];
-											if($name== $Employee)
-												$nm='doLinkSelected';
-											else
-												$nm='doLink';
-											?>
-											<!-- <a href="do.php?name=<?php echo $name;?>" id="<?php echo $nm;?>" class="button"> -->
-											<a href="dosales.php?name=<?php echo htmlspecialchars($name, ENT_QUOTES, 'UTF-8');?>&num=<?php echo htmlspecialchars($lineNum, ENT_QUOTES, 'UTF-8');?>" id="<?php echo $nm;?>" class="button">
-											<?php
-											echo htmlspecialchars($data['EmpName'], ENT_QUOTES, 'UTF-8')."</a>";
-										}
-										
-								?>
-							<!--<button onclick="ShowHideMFS()">MFS</button> -->
-							<button onclick="ShowHideCard()">Card</button>
-							<button onclick="ShowHidePhone()">Phone</button>
-							<button onclick="ShowHideSim()">SIM</button>
-							</div>
-					<div>
-								<form name="f1" action="" method="POST">
-										<table cellpadding="0" cellspacing="0" border="0" class="table" id="" >
-										<tr>
-											<td>
-											<div>
-												<table cellpadding="0" cellspacing="0" border="0" class="table" id="HeadTable" >
-															<tr>
-																<td colspan="3"style="text-align: center;"> <h2>Load + Payment</h2></td>
-															</tr>
-															<tr>
-																<td style="text-align: right;"> Date:</td>
-																<td style="text-align: left;">
-																		<?php
-																			$Coma='"';
-																			$strDate= date('Y-m-d');
-																			if ($currentUserType=="Admin")
-																				echo "<input type=\"date\" value= \"$strDate\"  name=\"txtDate\" id=\"tBox\">";
-																			else
-																				echo "<input type=\"date\" value= \"$strDate\"  name=\"txtDate\" id=\"tBox\" readonly>";
-																		echo $lineNumber;
-																		?>
-																</td>
-																<td></td>
-															</tr>
-															<tr><td></td></tr>
-															<tr>
-																<td style="text-align: right" >Load Amount:
-																</td>
-																<td style="text-align: left;" >
-																	<input type="text" name="txtLoad" id="tBox" autofocus> 
-																	<input type="submit"  value="Send Load" name="AddLoad" id="Btn">
-																</td>				
-																<!-- <td rowspan="2" style="text-align: left;" >
-																<input type="submit"  value="Save" name="Go1" id="BtnBig" accesskey="g">
-																</td> -->
-															</tr>
-															<tr><td><br><br></td></tr>
-															<tr>
-																<td style="text-align: right;" >Cash Amount:  
-																</td>
-																<td style="text-align: left;" >
-																	<input type="text" name="txtAmnTaken" id="tBoxSpecial">
-																	into
-																	<select name="modeSelect" id="sBoxSpecial"/>
-																		<option >---</option>
-																		<?php
-																		$doQ=mysqli_query($con,"SELECT modeName from rpmode");
-																		while($data=mysqli_fetch_array($doQ))
-																		{
-																			//if ( $_POST['modeSelect'] == $data['modeName'])
-																			if ($data['modeName'] == $defaultBankName)
-																				echo "<option selected>";
-																			else
-																				echo "<option>";
-																			echo $data['modeName'];
-																			echo "<br>";
-																			echo "</option>";
-																		}
-																		?>
-																	</select>
-																	<input type="submit"  value="Receive" name="AmntReceive" id="Btn">
-																</td>
+        <!-- Action Cards Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            
+            <!-- Load + Payment Card -->
+            <div class="bg-white overflow-hidden shadow-lg rounded-xl border border-gray-100 hover:shadow-xl transition-shadow duration-300">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4 border-b pb-2">Load + Payment</h3>
+                    <form action="" method="POST" class="space-y-4">
+                        <input type="hidden" name="txtDate" value="<?php echo date('Y-m-d'); ?>">
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Load Amount</label>
+                            <div class="mt-1 flex rounded-md shadow-sm">
+                                <input type="text" name="txtLoad" class="focus:ring-indigo-500 focus:border-indigo-500 flex-1 block w-full rounded-l-md sm:text-sm border-gray-300 p-2 border" placeholder="0.00">
+                                <button type="submit" name="AddLoad" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-r-md text-white bg-indigo-600 hover:bg-indigo-700">
+                                    Send
+                                </button>
+                            </div>
+                        </div>
 
-																
-															</tr>
-												</table>
-											</div>
-											</td>
-											<td>
-												<div id="MfsDiv" style="display:none;">
-													<table cellpadding="0" cellspacing="0" border="0" class="table" id="HeadTable" >
-														<tr>
-															<td colspan="2"style="text-align: center;"> <h2>MFS</h2></td>
-														</tr>
-														<tr>	
-															<td style="text-align: center;"><h3>Sending</h3></td>
-															<td style="text-align: center;"><h3>Receiving</h3></td>
-														</tr>
-														<tr>	
-															<td style="text-align: right;">
-																MFS Sent:  <input type="text" name="txtmfsSend" id="tBox1">
-															</td>
-														
-															<td style="text-align: right;">
-																MFS Receive:<input type="text" name="txtmfsReceive" id="tBox1">
-															</td>
-														</tr>
-														<tr>	
-															<td style="text-align: right;">
-															<!--	Comments: --> <input type="text" name="txtMfsSendCmnt" id="tBox1" hidden>
-															</td>
-														
-															<td style="text-align: right;">
-															<!--	Comments: --> <input type="text" name="txtMfsRecCmnt" id="tBox1" hidden>
-															</td>
-														</tr>
-														<tr>
-														<td style="text-align: right;">
-																<input type="submit"  value="Send MFS" name="Addmfs" id="Btn">
-														</td>														
-														<td style="text-align: right;">
-																<input type="submit"  value="Get MFS" name="Recmfs" id="Btn">
-														</td>
-														</tr>
-														<!-- <tr>
-															<td colspan="2" style="text-align: center;">
-															<input type="submit"  value="Save MFS" name="Go2" id="Btn" accesskey="h">
-															</td>
-														</tr> -->
-													</table>
-												</div>
-												<div  id="CardDiv" style="display:none;">
-														<table cellpadding="0" cellspacing="0" border="0" class="table" id="HeadTable" >
-																	<tr>
-																		<td colspan="3"style="text-align: center;"> <h2>Cards</h2></td>
-																	</tr>
-																	<tr>
-																		<td style="text-align: right;">Card Type:</td>
-																		<td style="text-align: left;" >
-																			<select name="SubCselect" id="sBox">
-																					<!-- <option >---</option> -->
-																					<?php
-																						$doQ=mysqli_query($con,"SELECT typeName from types WHERE productName='Card' AND isActive=1  ");
-																						while($data=mysqli_fetch_array($doQ))
-																							{
-																								echo "<option>";
-																								echo $data['typeName'];
-																								echo "</option>";
-																							}
-																					?>
-																			</select>	
-																		</td>
-																		<td rowspan="5" style="text-align: left;" >
-																			<input type="submit"  value="Send Card" name="AddCQty" id="BtnBig">
-																		</td>
-																	</tr>
-																	<tr>
-																		<td style="text-align: right;" >Sale Quantity:</td>
-																		<td style="text-align: left;" >
-																		<input type="text" name="txtCQty" id="tBoxSpecial"> 
-																		Rate<input type="text" name="txtCSaleRate" id="tBoxSpecial"> 
-																		</td>
-																	</tr>
-																<!--	<tr>
-																		<td style="text-align: right;" >Card Comments:</td>
-																		<td style="text-align: left;">
-																-->
-																			<input type="text" name="txtCardCmnt" id="tBox" hidden> 
-																<!--	</td>
-																	</tr>
-																 -->
-																	<tr>
-																		<td style="text-align: Right;" >Amount Received:</td>
-																		<td>
-																			<input type="text" name="txtCardAmntRec" id="tBoxSpecial">into
-																				<select name="modeSelect1" id="sBoxSpecial">
-																					<option >---</option>
-																					<?php
-																					$doQ=mysqli_query($con,"SELECT modeName from rpmode");
-																					while($data=mysqli_fetch_array($doQ))
-																					{
-																						//if ( $_POST['modeSelect'] == $data['modeName'])
-																						if ($data['modeName'] == $defaultBankName)
-																							echo "<option selected>";
-																						else
-																							echo "<option>";
-																						echo $data['modeName'];
-																						echo "</option>";
-																					}
-																					?>
-																				</select>
-																		</td>
-																		<!-- <td rowspan="2" style="text-align: left;" >
-																			<input type="submit"  value="Receive" name="RecCardAmnt" id="Btn">
-																		</td> -->
-																	</tr>
-															<!-- 	<tr>
-																		<td style="text-align: right;" >Amount Comments:</td>
-																		<td style="text-align: left;">
-															-->
-																			<input type="text" name="txtCardAmntCmnt" id="tBox" hidden> 
-															<!-- 	</td>
-																	
-																	</tr>
-															-->
-														</table>
-											
-												</div>
-											
-												<div  id="PhoneDiv" style="display:none;">
-																<table cellpadding="0" cellspacing="0" border="0" class="table" id="HeadTable" >
-																	<tr>
-																		<td colspan="3"style="text-align: center;"> <h2>Phone & Devices</h2></td>
-																	</tr>
-																	<tr>
-																		<td style="text-align: right;">Phone/Device Type:</td>
-																		<td style="text-align: left;">
-																			<select name="SubPselect" id="sBox">
-																				<option >---</option>
-																				<?php
-																					$doQ=mysqli_query($con,"SELECT typeName from types WHERE productName='Mobile' AND isActive=1 ");
-																					while($data=mysqli_fetch_array($doQ))
-																						{
-																							echo "<option>";
-																							echo $data['typeName'];
-																							echo "</option>";
-																						}
-																				?>
-																			</select>
-																		</td>
-																		<td rowspan="5" style="text-align: left;" >
-																			<input type="submit"  value="Send Phone" name="AddPQty" id="BtnBig">
-																		</td>
-																	</tr>
-																	<tr>
-																		<td style="text-align: right;" >Sale Quantity:</td>
-																		<td style="text-align: left;" >
-																		<input type="text" name="txtPQty" id="tBoxSpecial">
-																		Rate <input type="text" name="txtPSaleRate" id="tBoxSpecial"> 
-																		</td>
-																	</tr>
-															<!--	<tr>
-																		<td style="text-align: right;" >Phone/Device Comments:</td>
-																		<td style="text-align: left;">
-															-->
-																			<input type="text" name="txtPCmnt" id="tBox" hidden> 
-															<!--    	</td>
-																	
-																	</tr>
-															-->
-																	<tr>
-																		<td style="text-align: Right;" >Amount Received:</td>
-																		<td>
-																			<input type="text" name="txtMobAmntRec" id="tBoxSpecial">into
-																				<select name="modeSelect2" id="sBoxSpecial">
-																					<option >---</option>
-																					<?php
-																					$doQ=mysqli_query($con,"SELECT modeName from rpmode");
-																					while($data=mysqli_fetch_array($doQ))
-																					{
-																						//if ( $_POST['modeSelect'] == $data['modeName'])
-																						if ($data['modeName'] == $defaultBankName)
-																							echo "<option selected>";
-																						else
-																							echo "<option>";
-																						echo $data['modeName'];
-																						echo "</option>";
-																					}
-																					?>
-																				</select>
-																		</td>
-																		<!-- <td rowspan="2" style="text-align: left;" >
-																			<input type="submit"  value="Receive" name="RecMobAmnt" id="Btn">
-																		</td> -->
-																	</tr>
-															<!-- 	<tr>
-																		<td style="text-align: right;" >Amount Comments:</td>
-																		<td style="text-align: left;">
-															-->
-																			<input type="text" name="txtPhoneAmntCmnt" id="tBox" hidden> 
-															<!-- 		</td>
-																	</tr>
-															-->
-														</table>
-												</div>
-												
-												<div  id="SimDiv" style="display: block;">
-														<table cellpadding="0" cellspacing="0" border="0" class="table" id="HeadTable" >
-																	<tr>
-																		<td colspan="3"style="text-align: center;"> <h2>SIMs</h2></td>
-																	</tr>
-																	<tr>
-																		<td style="text-align: right;">SIM Type:</td>
-																		<td style="text-align: left;" >
-																			<select name="SubSselect" id="sBox">
-																				<option >---</option>
-																					<?php
-																					$doQ=mysqli_query($con,"SELECT typeName from types WHERE productName='SIM' AND isActive=1 ");
-																					while($data=mysqli_fetch_array($doQ))
-																					{
-																						echo "<option>";
-																						echo $data['typeName'];
-																						echo "</option>";
-																					}
-																					?>
-																			</select>
-																		</td>
-																		<td rowspan="5" style="text-align: left;" >
-																			<input type="submit"  value="Send SIM" name="AddSQty" id="BtnBig">
-																		</td>
-																	</tr>
-																	<tr>
-																		<td style="text-align: right;" >Sale Quantity:</td>
-																		<td style="text-align: left;" >
-																		<input type="text" name="txtSQty" id="tBoxSpecial">
-																		Rate<input type="text" name="txtSSaleRate" id="tBoxSpecial">
-																		</td>
-																	</tr>
-															<!-- 	<tr>
-																		<td style="text-align: right;" >SIM Comments:</td>
-																		<td style="text-align: left;">
-															-->
-																			<input type="text" name="txtSCmnt" id="tBox" hidden> 
-															<!-- 		</td>
-																	
-																	</tr>
-															-->
-																	
-																	<tr>
-																		<td style="text-align: Right;" >Amount Received:</td>
-																		<td>
-																			<input type="text" name="txtSIMAmntRec" id="tBoxSpecial">into
-																				<select name="modeSelect3" id="sBoxSpecial">
-																					<option >---</option>
-																					<?php
-																					$doQ=mysqli_query($con,"SELECT modeName from rpmode");
-																					while($data=mysqli_fetch_array($doQ))
-																					{
-																						//if ( $_POST['modeSelect'] == $data['modeName'])
-																						if ($data['modeName'] == $defaultBankName)
-																							echo "<option selected>";
-																						else
-																							echo "<option>";
-																						echo $data['modeName'];
-																						echo "</option>";
-																					}
-																					?>
-																				</select>
-																		</td>
-																		<!-- <td rowspan="2" style="text-align: left;" >
-																			<input type="submit"  value="Receive" name="RecSIMAmnt" id="Btn">
-																		</td> -->
-														<!-- 			</tr>
-																	<tr>
-																		<td style="text-align: right;" >Amount Comments:</td>
-																		<td style="text-align: left;">
-														-->
-																			<input type="text" name="txtSimAmntCmnt" id="tBox" hidden>
-														<!-- 				</td>
-																	
-																	</tr>
-														-->
-														</table>
-												</div>
-											</td>
-											<?php if ($currentUserType=="Admin")
-											{
-												?>
-											<td bgcolor="">
-											<div>
-												<table cellpadding="0" cellspacing="0" border="0" class="table" id="HeadTable" >
-													<tr>
-														<td colspan="2" style="text-align: center;"><h2>Profitability</h2></td>
-													</tr>
-													<tr>
-														<td style="text-align: right;">Load:</td>
-														<td style="text-align: left;"><?php echo round($sumProfit,2);?></td>														
-													</tr>
-													<tr>
-														<td style="text-align: right;">Card:</td>
-														<td style="text-align: left;"><?php echo round($sumProLoss,2);?></td>														
-													</tr>
-													<tr>
-														<td style="text-align: right;">Devices:</td>
-														<td style="text-align: left;"><?php $proMob=getPl($Employee,'Mobile'); echo round($proMob,2);?></td>												
-													</tr>
-													<tr>
-														<td style="text-align: right;">SIMs:</td>
-														<td style="text-align: left;"><?php $proSim=getPl($Employee,'SIM'); echo round($proSim,2);?></td>												
-													</tr>
-													<tr>
-														<td colspan="2" style="text-align: center;">
-														==========
-														<br>
-														<strong>Net:<?php echo round($sumProfit,2) + round($sumProLoss,2) + round($proMob,2) + round($proSim,2);?></strong></td>												
-													</tr>
-												</table>
-											</div>
-											</td>
-											<?php
-											}
-												?>
-											</tr>
-										</table>
-								</form>
-					</div>
-					<div id="center" class="SubDiv0" style=" border: 0px solid Blue;">
-						<table cellpadding="0" cellspacing="0" border="1" class="" id="dbResult">
-							<thead>
-								<tr>
-									<th rowspan="2">Date</th>
-									<th colspan="2">Load</th>
-									<th colspan="2">MFS</th>
-									<th rowspan="2">Opening</th>
-									<th rowspan="2">Receivable</th>
-									<th rowspan="2">Taken</th>
-									<th rowspan="2">LMC Dues</th>
-									<th rowspan="2">Cards</th>
-									<th rowspan="2">Devices</th>
-									<th rowspan="2">SIMs</th>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Cash Receive</label>
+                            <div class="mt-1 flex rounded-md shadow-sm">
+                                <input type="text" name="txtAmnTaken" class="focus:ring-green-500 focus:border-green-500 flex-1 block w-full rounded-l-md sm:text-sm border-gray-300 p-2 border" placeholder="Amount">
+                                <select name="modeSelect" class="focus:ring-indigo-500 focus:border-indigo-500 block w-24 sm:text-sm border-gray-300 border-t border-b border-gray-300 bg-white">
+                                    <option>---</option>
+                                    <?php
+                                    $bankQ = mysqli_query($con, "SELECT modeName from rpmode");
+                                    while($row = mysqli_fetch_assoc($bankQ)) {
+                                        $selected = ($row['modeName'] == $defaultBankName) ? 'selected' : '';
+                                        echo "<option $selected>{$row['modeName']}</option>";
+                                    }
+                                    ?>
+                                </select>
+                                <button type="submit" name="AmntReceive" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-r-md text-white bg-green-600 hover:bg-green-700">
+                                    Receive
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
 
-								</tr>
-								<tr>
-									<th>Load</th>
-									<th>Transfer</th>
-									<th>Send</th>
-									<th>Receive</th>
-								</tr>
-							</thead>
-				
-							<tbody>
-							
-									<?php
-									echo $stringLast;
-									echo $stringToPrint;
-									?>
-							</tbody>
-								<tfoot >
-									<tr style="border: solid black 2px;"  >
-											<td> <b> TOTAL: </b></td>
-											<td> <b><?php echo $sumLoad; ?></b></td>
-											<td> <b><?php echo $sumTransfer; ?></b></td>
-											<!-- <td> <b><?php echo round($sumProfit,2); ?></b></td> -->
-											<td> <b><?php echo $sumSend; ?></b></td>
-											<td> <b><?php echo $sumReceive; ?></b></td>
-											<!-- <td> <b><?php echo $sumClose; ?></b></td> -->
-											<!-- <td> <b><?php echo $sumQty; ?></b></td> -->
-											<!-- <td> <b><?php echo round($sumOrgAmnt,2); ?></b></td> -->
-											<!--  <td> <b><?php //echo $avgRate; ?></b></td> -->
-											<!-- <td> <b><?php echo $sumAmnt; ?></b></td> -->
-											<!-- <td> <b><?php echo round($sumProLoss,2); ?></b></td> -->
-											<td> <b><?php echo $open; ?></b></td>
-											<td> <b><?php echo $sumReceivable; ?></b></td>
-											<td> <b><?php echo $sumTaken; ?></b></td>
-											<td> <b><?php echo $closing; ?></b></td>
-											<td style="text-align:center; background: green; color: white; text-align: right;"> <b><?php echo $cardreceivables; ?></b></td>
-											<td style="text-align:center; background: green; color: white; text-align: right;"> <b><?php echo $MobileClose; ?></b></td>
-											<td style="text-align:center; background: green; color: white; text-align: right;"> <b><?php echo $SIMClose; ?></b></td>
-										
-									</tr>
-									
-								</tfoot>
-						</table>
-						
-					</div>
-					<br>
-			</div>
-	<script>
-	function ShowHideMFS() {
-		var x01 = document.getElementById('CardDiv');
-		var x02 = document.getElementById('PhoneDiv');
-		var x03 = document.getElementById('SimDiv');
-		var x04 = document.getElementById('MfsDiv');
-		if (x04.style.display === 'none') {
-			x01.style.display = 'none';
-			x02.style.display = 'none';
-			x03.style.display = 'none';
-			x04.style.display = 'block';
-		}
-	}
-	function ShowHideCard() {
-		var x1 = document.getElementById('CardDiv');
-		var x2 = document.getElementById('PhoneDiv');
-		var x3 = document.getElementById('SimDiv');
-		var x4 = document.getElementById('MfsDiv');
-		if (x1.style.display === 'none') {
-			x1.style.display = 'block';
-			x2.style.display = 'none';
-			x3.style.display = 'none';
-			x4.style.display = 'none';
-		}
-	}
-	function ShowHidePhone() {
-		var x10 = document.getElementById('CardDiv');
-		var x11 = document.getElementById('PhoneDiv');
-		var x12 = document.getElementById('SimDiv');
-		var x13 = document.getElementById('MfsDiv');
-		if (x11.style.display === 'none') {
-			x10.style.display = 'none';
-			x11.style.display = 'block';
-			x12.style.display = 'none';
-			x13.style.display = 'none';			
-		}
-	}
-	function ShowHideSim() {
-		var x20 = document.getElementById('CardDiv');
-		var x21 = document.getElementById('PhoneDiv');
-		var x22 = document.getElementById('SimDiv');
-		var x23 = document.getElementById('MfsDiv');
-		if (x22.style.display === 'none') {
-			x20.style.display = 'none';
-			x21.style.display = 'none';
-			x22.style.display = 'block';
-			x23.style.display = 'none';
-		}
-	}
-	
-	
-	
-	/*
-	function ShowHideSim() {
-		var x20 = document.getElementById('CardDiv');
-		var x21 = document.getElementById('PhoneDiv');
-		var x22 = document.getElementById('SimDiv');
-		if (x22.style.display === 'block') {
-			x22.style.display = 'none';
-		} else {
-			x20.style.display = 'none';
-			x21.style.display = 'none';
-			x22.style.display = 'block';
-		}
-	}*/
-</script>
+            <!-- MFS Card -->
+            <div class="bg-white overflow-hidden shadow-lg rounded-xl border border-gray-100 hover:shadow-xl transition-shadow duration-300">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4 border-b pb-2">MFS (Jazz/EasyPaisa)</h3>
+                    <form action="" method="POST" class="space-y-4">
+                        <input type="hidden" name="txtDate" value="<?php echo date('Y-m-d'); ?>">
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Send Money</label>
+                            <div class="mt-1 flex rounded-md shadow-sm">
+                                <input type="text" name="txtmfsSend" class="focus:ring-indigo-500 focus:border-indigo-500 flex-1 block w-full rounded-l-md sm:text-sm border-gray-300 p-2 border" placeholder="Amount">
+                                <button type="submit" name="Addmfs" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-r-md text-white bg-indigo-600 hover:bg-indigo-700">
+                                    Send
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Receive Money</label>
+                            <div class="mt-1 flex rounded-md shadow-sm">
+                                <input type="text" name="txtmfsReceive" class="focus:ring-green-500 focus:border-green-500 flex-1 block w-full rounded-l-md sm:text-sm border-gray-300 p-2 border" placeholder="Amount">
+                                <button type="submit" name="Recmfs" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-r-md text-white bg-green-600 hover:bg-green-700">
+                                    Get
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Cards Management -->
+            <div class="bg-white overflow-hidden shadow-lg rounded-xl border border-gray-100 hover:shadow-xl transition-shadow duration-300">
+                <div class="px-4 py-5 sm:p-6">
+                     <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4 border-b pb-2">Scratch Cards</h3>
+                     <form action="" method="POST" class="space-y-2">
+                        <input type="hidden" name="txtDate" value="<?php echo date('Y-m-d'); ?>">
+                        
+                        <select name="SubCselect" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border">
+                            <?php
+                            $typeQ = mysqli_query($con, "SELECT typeName from types WHERE productName='Card' AND isActive=1");
+                            while($row = mysqli_fetch_assoc($typeQ)) {
+                                echo "<option>{$row['typeName']}</option>";
+                            }
+                            ?>
+                        </select>
+                        
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="text" name="txtCQty" placeholder="Qty" class="block w-full rounded-md border-gray-300 border p-2 text-sm">
+                            <input type="text" name="txtCSaleRate" placeholder="Rate" class="block w-full rounded-md border-gray-300 border p-2 text-sm">
+                        </div>
+
+                        <div class="pt-2 border-t mt-2">
+                            <label class="text-xs text-gray-500">Payment (Optional)</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" name="txtCardAmntRec" placeholder="Amount" class="block w-full rounded-md border-gray-300 border p-2 text-sm">
+                                <select name="modeSelect1" class="block w-full rounded-md border-gray-300 border p-2 text-sm">
+                                    <option>---</option>
+                                    <?php
+                                    $bankQ = mysqli_query($con, "SELECT modeName from rpmode");
+                                    while($row = mysqli_fetch_assoc($bankQ)) {
+                                         echo "<option>".htmlspecialchars($row['modeName'])."</option>";
+                                    }
+                                    ?>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button type="submit" name="AddCQty" class="w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+                            Process Card Sale
+                        </button>
+                     </form>
+                </div>
+            </div>
+
+            <!-- Profitability (Admin Only) -->
+            <?php if ($showProfitability): ?>
+            <div class="bg-indigo-50 overflow-hidden shadow-lg rounded-xl border border-indigo-100 card-gradient">
+                <div class="px-4 py-5 sm:p-6 opacity-90">
+                    <h3 class="text-lg leading-6 font-bold text-indigo-900 mb-4 border-b border-indigo-200 pb-2">Profitability</h3>
+                    <div class="space-y-2 text-indigo-800">
+                        <div class="flex justify-between"><span>Load Profit:</span> <span class="font-semibold"><?php echo number_format($totals['profit'], 2); ?></span></div>
+                        <div class="flex justify-between"><span>Card Profit:</span> <span class="font-semibold"><?php echo number_format($cardProfit, 2); ?></span></div>
+                        <div class="flex justify-between"><span>Device Profit:</span> <span class="font-semibold"><?php echo number_format($mobileProfit, 2); ?></span></div>
+                        <div class="flex justify-between"><span>SIM Profit:</span> <span class="font-semibold"><?php echo number_format($simProfit, 2); ?></span></div>
+                        <div class="border-t border-indigo-300 pt-2 mt-2 flex justify-between text-lg font-bold">
+                            <span>NET:</span> <span><?php echo number_format($netProfit, 2); ?></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
+        </div>
+
+        <!-- Data Table -->
+        <div class="flex flex-col">
+            <div class="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                <div class="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
+                    <div class="shadow overflow-hidden border-b border-gray-200 sm:rounded-lg">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Load</th>
+                                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Transfer</th>
+                                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MFS Sent</th>
+                                    <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MFS Get</th>
+                                    <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Opening</th>
+                                    <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Receivable</th>
+                                    <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider font-bold">Takens</th>
+                                    <th scope="col" class="px-3 py-3 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Dues</th>
+                                    <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-green-700 uppercase tracking-wider hidden lg:table-cell">Card Dues</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <?php foreach($reportData as $row): ?>
+                                <tr class="hover:bg-gray-50 transition-colors">
+                                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500"><?php echo $row['date']; ?></td>
+                                    <td class="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900"><?php echo $row['load']; ?></td>
+                                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell"><?php echo $row['transfer']; ?></td>
+                                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500"><?php echo $row['mfsSend']; ?></td>
+                                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500"><?php echo $row['mfsReceive']; ?></td>
+                                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-400 text-right hidden md:table-cell"><?php echo $row['opening']; ?></td>
+                                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-700 text-right"><?php echo $row['receivable']; ?></td>
+                                    <td class="px-3 py-2 whitespace-nowrap text-sm font-bold text-green-600 text-right"><?php echo $row['taken']; ?></td>
+                                    <td class="px-3 py-2 whitespace-nowrap text-sm font-bold <?php echo ($row['dues'] > 0) ? 'text-red-600' : 'text-gray-900'; ?> text-right">
+                                        <?php echo $row['dues']; ?>
+                                    </td>
+                                    <td class="px-3 py-2 whitespace-nowrap text-sm text-right text-green-800 hidden lg:table-cell"><?php echo $row['cardReceivable']; ?></td>
+                                </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                            <tfoot class="bg-gray-100">
+                                <tr class="font-bold text-sm">
+                                    <td class="px-3 py-3">TOTAL</td>
+                                    <td class="px-3 py-3"><?php echo $totals['load']; ?></td>
+                                    <td class="px-3 py-3 hidden sm:table-cell"><?php echo $totals['transfer']; ?></td>
+                                    <td class="px-3 py-3"><?php echo $totals['mfsSend']; ?></td>
+                                    <td class="px-3 py-3"><?php echo $totals['mfsReceive']; ?></td>
+                                    <td class="px-3 py-3 text-right hidden md:table-cell"><?php echo $reportData[0]['opening'] ?? 0; ?></td>
+                                    <td class="px-3 py-3 text-right"><?php echo array_sum(array_column($reportData, 'receivable')); // Sum of receivables is weird conceptually, maybe last day? dosales uses sum. ?></td>
+                                    <td class="px-3 py-3 text-right text-green-700"><?php echo $totals['taken']; ?></td>
+                                    <td class="px-3 py-3 text-right"><?php echo $currentOpening; // Final Closing ?></td>
+                                    <td class="px-3 py-3 text-right text-green-900 hidden lg:table-cell"><?php echo $finalCardClose; ?></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="bg-white border-t mt-12 py-8">
+        <div class="max-w-7xl mx-auto px-4 text-center text-gray-400 text-sm">
+            &copy; <?php echo date('Y'); ?> VibeCoded Modern App. 
+        </div>
+    </footer>
+
+</body>
 </html>

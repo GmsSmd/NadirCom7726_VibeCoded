@@ -1,881 +1,282 @@
 <?php
-include_once('../session.php');
-//echo "<br><br><br>";
-include_once('includes/variables.php');
-include_once('includes/creditcalculation.php');
-include_once('includes/stockcalculation.php');
-include_once('includes/getsummary.php');
-include_once('includes/globalvar.php');
+session_start();
+require_once __DIR__ . '/../config.php';
 
-$closing=0;
+// Authentication Check
+if (!isset($_SESSION['login_user'])) {
+    header("location: ../login.php");
+    exit();
+}
 
-$pageTitle = 'Summary';
-$navbarFile = 'layouts/admin_navbar.php';
-ob_start();
+use App\Services\SummaryService;
+
+$service = new SummaryService();
+$currentUserType = $_SESSION['login_type'];
+$dateNow = date('Y-m-d');
+$currentMonth = date('M-Y');
+$dateFrom = date('Y-m-01');
+$dateTo = date('Y-m-t'); // Last day of month
+
+// Fetch Data
+$openings = $service->getOpeningBalances($currentMonth);
+$targets = $service->getTargets($currentMonth);
+$achieved = $service->getAchievedStats($dateFrom, $dateTo);
+$profits = $service->getProfits($dateFrom, $dateTo);
+$investments = $service->getInvestments($currentMonth, $dateFrom, $dateTo);
+$expenses = $service->getExpenses($dateFrom, $dateTo);
+
+// Metrics Calculations
+$totalProfit = $profits['Otar'] + $profits['MFS'] + $profits['OtherCommission'] + $profits['Cards'] + $profits['Mobile'] + $profits['SIM'];
+$totalExpenses = $expenses['Fixed'] + $expenses['Regular'] + $expenses['Tax'] + $expenses['Salary'];
+$netVisibility = $totalProfit - $totalExpenses;
+
+$totalInvestment = $investments['Otar'] + $investments['MFS'] + $investments['Card'] + $investments['Mobile'] + $investments['SIM'];
+
 ?>
-			<head>
-			    <!-- Legacy Scroll Script -->
-					<script type="text/javascript">
-					        // document.getElementById('scrollBottom').scrollTop = 9999999;
-					</script>
-			</head>
-<?php
-if($currentUserType=='Admin')
-{
-?>	
-	<div class="container mx-auto px-4 py-6" id="cntnr">	
-		<div id="center" class="mb-8" >	
-<div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
-    <!-- Target Summary Card -->
-    <div class="bg-white shadow rounded-lg overflow-hidden">
-        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
-            <h4 class="text-lg font-bold text-gray-800">Target Summary</h4>
-        </div>
-        <div class="p-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                 <!-- Header Row -->
-                 <div class="font-semibold text-gray-600 hidden md:block">Metric</div>
-                 <div class="font-semibold text-gray-600 hidden md:block">Benchmark</div>
-                 <div class="font-semibold text-gray-600 hidden md:block">Remain WDs</div>
-                 <div class="font-semibold text-gray-600 hidden md:block">Detailed Stock</div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Summary</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-50 text-slate-800 font-sans">
 
-                 <!-- Mobile Load -->
-                 <div class="md:col-span-1 font-medium text-gray-900"><?php echo $mobLoadName; ?></div>
-                 <div class="md:col-span-1">Target: <?php echo $FrMobLoadTarget; ?><br>Achieved: <?php echo $FrMobLoadAchieved ?><br>Remain: <?php echo $FrMobLoadTargetRemain ?></div>
-                 <div class="md:col-span-1 flex flex-col space-y-2">
-                     <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-center block" title="This Day"><?php echo $ThisDay ?></span>
-                     <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-center block" title="Current Day"><?php echo $CurrentDay ?></span>
-                 </div>
-                 <div class="md:col-span-1 text-xs text-gray-500 overflow-hidden">
-                    <?php echo calcStocks($scratchCardName, $QueryFD,$QueryLD,$CurrentMonth) ; 
-                          echo calcStocks($simsName, $QueryFD,$QueryLD,$CurrentMonth) ; 
-                          echo calcStocks($mobileDevicesName, $QueryFD,$QueryLD,$CurrentMonth) ;?>
-                 </div>
-
-                 <!-- Scratch Card -->
-                 <div class="md:col-span-1 font-medium text-gray-900 border-t pt-2 mt-2"><?php echo $scratchCardName; ?></div>
-                 <div class="md:col-span-1 border-t pt-2 mt-2">Target: <?php echo $FrCardtarget ?><br>Achieved: <?php echo $FrCardAchieved ?><br>Remain: <?php echo $FrCardtargetRemain ?></div>
-                 <div class="md:col-span-1 border-t pt-2 mt-2 flex items-center justify-center">
-                      <span class="px-2 py-1 bg-cyan-100 text-cyan-800 rounded text-center block w-full" title="Last Day"><?php echo $LastDay ?></span>
-                 </div>
-                 <div class="md:col-span-1 border-t pt-2 mt-2"></div>
-
-                 <!-- Mobile Devices -->
-                 <div class="md:col-span-1 font-medium text-gray-900 border-t pt-2 mt-2"><?php echo $mobileDevicesName; ?></div>
-                 <div class="md:col-span-1 border-t pt-2 mt-2">
-                     Target: <?php echo $mobitarget ?><br>
-                     Achieved: <?php echo $dmAchAchieved ?><br>
-                     Remain: <?php echo $mobitarget-$dmAchAchieved ?>
-                 </div>
-                 <div class="md:col-span-2 border-t pt-2 mt-2 text-gray-500 italic">
-                     (Device stats calculated)
+    <!-- Navbar -->
+    <nav class="bg-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                         <span class="font-bold text-xl text-indigo-600">NadirCom</span>
+                    </div>
+                </div>
+                 <div class="hidden md:flex items-center space-x-4">
+                    <a href="#" class="text-indigo-600 px-3 py-2 rounded-md text-sm font-medium bg-indigo-50">Summary</a>
+                    <a href="dosales.php?name=DO" class="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">Sales</a>
+                    <a href="dodues.php?name=DO" class="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">Payments</a>
+                    <a href="lifting.php" class="text-gray-700 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium">Purchase</a>
+                    <a href="../logout.php" class="text-red-500 hover:text-red-700 px-3 py-2 rounded-md text-sm font-medium">Logout</a>
                  </div>
             </div>
         </div>
-    </div>
+    </nav>
 
-    <!-- Otar Visibility Card -->
-    <div class="bg-white shadow rounded-lg overflow-hidden">
-        <div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
-            <h4 class="text-lg font-bold text-gray-800">Visibility & Investment</h4>
+    <main class="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
+            <p class="text-sm text-gray-500">Performance Overview for <?php echo $currentMonth; ?></p>
         </div>
-        <div class="overflow-x-auto p-4">
-            <table class="min-w-full divide-y divide-gray-200 text-sm">
-                <tbody class="bg-white divide-y divide-gray-200">
-                    <tr>
-                        <td class="px-4 py-2 font-medium text-gray-900">Otar Visibility:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($netProfit,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">Otar Invest:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($OtarInvestLessMargin,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">Opening Investment:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($initialInvest,2) ?></td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-medium text-gray-900">MFS Visibility:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($mfsProfits,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">MFS Invest:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo $mfsinvestment; ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">New Investment:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($currentInvest,2) ?></td>
-                    </tr>   
-                    <tr>
-                        <td class="px-4 py-2 font-medium text-gray-900">SIM Visibility:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($CDProLoss ,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">SIM Invest:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($CDClosingstock,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">New Withdraw:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($currentWithdraw,2) ?></td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-medium text-gray-900">Set Visibility:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($MobProLoss ,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">Set Invest:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($mobClosingstock,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">Total Investment:</td>
-                        <td class="px-4 py-2 font-bold text-gray-900"><?php echo round($currentinvestment,0); ?></td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-medium text-gray-900">Card Visibility:</td>
-                        <td class="px-4 py-2 text-gray-700"> <?php echo round($cardPL ,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">Card Invest:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($cAmntSum,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">Visibility:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($totalVisibil-$regularExpenses ,0) ?></td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-medium text-gray-900">Other Comission:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($otherComissionReceived,0); ?></td>
-                        <td class="px-4 py-2 font-bold text-gray-900">LMC Dues:</td>
-                        <td class="px-4 py-2 font-bold text-gray-900"><?php echo round($totalCash,0)?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">Salary, Expenses Due</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($pendSalExp,0) ?></td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-medium text-gray-900">Online Tax:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round(-$taxAmnt,2) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">Mobile Dues:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($totalMobile,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900"> Pending Profit:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($ProfitDueAmnt,2) ?></td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-medium text-gray-900">Reg Expenses:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo $regularExpenses?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">SIM Dues:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($totalSIM,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">Company Credit:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($companycreditnow,0) ?></td>
-                    </tr>
-                    <tr class="bg-gray-50">
-                        <td class="px-4 py-2 font-bold text-gray-900"> Total Visibility: </td>
-                        <td class="px-4 py-2 font-bold text-gray-900"><?php echo round($totalVisibil-$regularExpenses ,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">DO-Advance</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($DODue,0) ?></td>
-                        <td class="px-4 py-2 font-bold text-gray-900">Current Investment:</td>
-                        <td class="px-4 py-2 font-bold text-gray-900"><?php echo round($totalinvestment,0) ?></td>
-                    </tr>
-                    <tr>
-                        <td class="px-4 py-2 font-medium text-gray-900">Salary, Expenses:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($ThisMonthsalary + $fixedExpenses,0) ?></td>
-                        <td class="px-4 py-2 font-bold text-gray-900">Bank Invest:</td>
-                        <td class="px-4 py-2 font-bold text-gray-900"><?php echo round($BankClosing ,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">Original Investment:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($currentinvestment,0); ?></td>
-                    </tr>
-                    <tr class="bg-blue-50">
-                        <td class="px-4 py-2 font-bold text-gray-900"> Net Visibility: </td>
-                        <td class="px-4 py-2 font-bold text-gray-900"><?php echo round($netVisibil ,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">Total Invest:</td>
-                        <td class="px-4 py-2 text-gray-700"><?php echo round($totalinvestment ,0) ?></td>
-                        <td class="px-4 py-2 font-medium text-gray-900">Closing Difference:</td>
-                        <td class="px-4 py-2 font-bold <?php echo (round($closingDiff- $companycreditnow+$regularExpenses,0) != 0) ? 'text-red-600' : 'text-green-600'; ?>">
-                            <?php echo round($closingDiff- $companycreditnow+$regularExpenses,0); ?>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-		
-		<div id="center" class="SubDiv2" style=" border: 0px solid Blue;">	
-			<table cellpadding="0" cellspacing="0" border="1" align="center" id="header-fixed0">
-					<tr style="background-color: #ADBEE0;">
-							<td colspan="6" ><center><h4> Otar Details</h4></center></td>
-							<td colspan="6" ><center><h4> JazzCash Details</h4></center></td>
-							<td colspan="5" ><center><h4> Card Details</h4></center></td>
-					</tr>		
-					<tr style="background-color: #ADBEE0;">	
-							<!-- <td //style="width:95px">Date</td> -->
-							<th style="width:90px">Date</th>
-							<th style="width:70px">Opening</th>
-							<th style="width:70px">Lifting</th>
-							<th style="width:70px">InHand</th>
-							<th style="width:70px">Sale</th>
-							<th style="width:70px">Closing</th>
-							
-							<th style="width:70px">Opening</th>
-							<th style="width:70px">Lifting</th>
-							<th style="width:70px">Comission</th>
-							<th style="width:70px">Sending</th>
-							<th style="width:70px">Receiving</th>
-							<th style="width:70px">Closing</th>
-							
-							<th style="width:70px">Opening</th>
-							<th style="width:70px">Lifting</th>
-							<th style="width:70px">InHand</th>
-							<th style="width:70px">Sale</th>
-							<th style="width:70px">Closing</th>
-					</tr>
-			</table>
-		</div>
-		<div id="scrollBottom" class="SubDiv3" style=" border: 0px solid Blue;">	
-			<table cellpadding="0" cellspacing="0" border="1" align="center" id="header-fixed0">
-													<?php
-														$Opening1=$FrOtarOpening;
-														$Opening2=$FrmfsOpening;
-														$Opening3=$FrCardopening;
-														
-														for($i=$date_from; $i<=$date_to; $i+=86400)
-														{
-															echo "<tr>";
-															$cd=date("Y-m-d", $i);
-															
-														//	1st Table
-															$q=mysqli_query($con,"SELECT sum(loadAmnt) FROM tbl_mobile_load WHERE loadStatus='Received' AND loadEmp='$parentCompany' AND loadDate ='$cd' ");
-															WHILE($Data=mysqli_fetch_array($q))
-																{ $OtarLift = $Data['sum(loadAmnt)']; }
-															$inHand=$Opening1+$OtarLift;
-															$q=mysqli_query($con,"SELECT sum(loadTransfer) FROM tbl_mobile_load WHERE loadStatus='Sent' AND loadDate ='$cd' ");
-															WHILE($Data=mysqli_fetch_array($q))
-																{ $OtarSale = $Data['sum(loadTransfer)']; }
-															$closing1=$inHand-$OtarSale;
-															echo '<td style="width:90px">' . date("d-m-Y", $i)."</td>";
-															echo '<td style="width:70px">' . $Opening1 . "</td>";
-															echo '<td style="width:70px">' . $OtarLift . "</td>";
-															echo '<td style="width:70px">' . $inHand . "</td>";
-															echo '<td style="width:70px">' . $OtarSale . "</td>";
-															echo '<td style="width:70px"><b>' . $closing1 . "</b></td>";
-															$Opening1=$closing1;
-														
-														//  2nd Table
-															$q=mysqli_query($con,"SELECT sum(mfsAmnt) FROM tbl_financial_service WHERE mfsStatus='Received' AND mfsEmp='$parentCompany' AND mfsDate ='$cd' ");
-															$Data=mysqli_fetch_array($q);
-															$mfsLift = $Data['sum(mfsAmnt)'];
-															$q=mysqli_query($con,"SELECT sum(comAmnt) FROM comission WHERE comType='mfs comission' AND comEmp='$parentCompany' AND comDate ='$cd' ");
-															$Data=mysqli_fetch_array($q);
-															$mfscomission = $Data['sum(comAmnt)'];
-															$q1=mysqli_query($con,"SELECT sum(mfsAmnt) FROM tbl_financial_service WHERE mfsStatus='Sent' AND mfsDate ='$cd'  ");
-															$Data1=mysqli_fetch_array($q1);
-															$mfsSale = $Data1['sum(mfsAmnt)'];
-															$q2=mysqli_query($con,"SELECT sum(mfsAmnt) FROM tbl_financial_service WHERE mfsStatus='Received' AND mfsDate ='$cd' AND mfsEmp != '$parentCompany' ");
-															$Data2=mysqli_fetch_array($q2);
-															$mfsReceive = $Data2['sum(mfsAmnt)'];
-															$closing2=($Opening2+$mfsLift+$mfscomission+$mfsReceive)-$mfsSale;
-															echo '<td style="width:70px">' . $Opening2 . "</td>";
-															echo '<td style="width:70px">' . $mfsLift . "</td>";
-															echo '<td style="width:70px">' . $mfscomission . "</td>";
-															echo '<td style="width:70px">' . $mfsSale . "</td>";
-															echo '<td style="width:70px">' . $mfsReceive  . "</td>";
-															echo '<td style="width:70px"><b>' . $closing2 . "</b></td>";
-															 
-															$Opening2=$closing2;
-														
-														//	3rd Table
-															$q=mysqli_query($con,"SELECT sum(csQty) FROM tbl_cards WHERE csStatus='Received' AND csEmp='$parentCompany' AND csDate ='$cd' ");
-															$Data=mysqli_fetch_array($q);
-															$CardLift = $Data['sum(csQty)'];
-															$CardInHand=$Opening3+$CardLift;
-															$q=mysqli_query($con,"SELECT sum(csQty) FROM tbl_cards WHERE csStatus='Sent' AND csDate ='$cd' ");
-															$Data=mysqli_fetch_array($q);
-															$tbl_cards = $Data['sum(csQty)'];
-															$closing3=$CardInHand-$tbl_cards;
-															echo '<td style="width:70px">' . $Opening3 . "</td>";
-															echo '<td style="width:70px">' . $CardLift . "</td>";
-															echo '<td style="width:70px">' . $CardInHand . "</td>";
-															echo '<td style="width:70px">' . $tbl_cards . "</td>";
-															echo '<td style="width:70px"><b>' . $closing3 . "</b></td>";
-															echo "</tr>";
-															$Opening3=$closing3;
-														}
-													?>
-				
-			</table>
-		</div >
-	</div>
-<?php
-}
-else if($currentUserType=='Manager')
-{
-?>
-<div class="container" id="cntnr" style="border: solid blue 0px">	
-		<div id="center" class="SubDiv1" style=" border: 0px solid Red;">	
-			<table cellpadding="0" cellspacing="0" border="0" align="center" id="tb102">
-				<tr>
-					<td> 
-						<table cellpadding="0" cellspacing="0" border="1" id="example">
-							<tr style="background-color: #ADBEE0;">
-								<th colspan="6" >
-									<center>
-										<h4> Target Summary</h4>
-									</center>
-								</th>
-							</tr>
-							<tr>
-								<td>Target Details:</td>
-								<td>Benchmark:</td>
-								<td>Remain WDs:</td>
-								<td colspan="3" style="text-align: center;">Datailed Stock</td>
-							</tr>
-							<tr>
-								<td><?php echo $mobLoadName; ?> Target:</td>
-								<td><?php echo $FrMobLoadTarget; ?></td>
-								<td bgcolor="#00bfff" style="text-align: center; font: 16px arial Black; color: Black"><?php echo $ThisDay ?></td>
-								<td rowspan="9" colspan="3"><?php echo calcStocks($scratchCardName, $QueryFD,$QueryLD,$CurrentMonth) ; echo calcStocks($simsName, $QueryFD,$QueryLD,$CurrentMonth) ; echo calcStocks($mobileDevicesName, $QueryFD,$QueryLD,$CurrentMonth) ;?></td>
-							</tr>
-							<tr>
-								<td><?php echo $mobLoadName; ?> Achieved:</td>
-								<td><?php echo $FrMobLoadAchieved ?></td>
-								<td rowspan="2" bgcolor="#FFFF00" style="text-align: center; font: 30px arial Black;"><?php echo $CurrentDay ?></td>
-							</tr>
-							<tr>
-								<td><?php echo $mobLoadName; ?> Remain:</td>
-								<td><?php echo $FrMobLoadTargetRemain ?></td>
-							</tr>
-							<tr>
-								<td><?php echo $scratchCardName; ?> Target:</td>
-								<td> <?php echo $FrCardtarget ?></td>
-								<td rowspan="3" bgcolor="#0099cc" style="text-align: center; font: 48px arial Black;"><?php echo $LastDay ?></td>
-							</tr>
-							<tr>
-								<td><?php echo $scratchCardName; ?> Achieved:</td>
-								<td> <?php echo $FrCardAchieved ?></td>
-							</tr>
-							<tr>
-								<td><?php echo $scratchCardName; ?> Remain:</td>
-								<td> <?php echo $FrCardtargetRemain ?></td>
-							</tr>
-							<tr>
-								<td><?php echo $mobileDevicesName; ?> Target</td>
-								<td> <?php echo $mobitarget ?></td>
-								<td>Total %</td>
-							</tr>
-							<tr>
-								<td> <?php echo $mobileDevicesName; ?> Achieved</td>
-								<td><?php echo $dmAchAchieved ?></td>
-								<td> Dev. Ach. %</td>
-							</tr>
-							<tr>
-								<td> <?php echo $mobileDevicesName; ?> Remain</td>
-								<td> <?php echo $mobitarget-$dmAchAchieved ?></td>
-								<td>Dev. Remain %</td>
-							</tr>
-						</table>
-					</td>
-					<td colspan="2"> 
-													<table cellpadding="0" cellspacing="0" border="1" id="">
-																		<tr>
-																			<td>Otar Visibility:</td>
-																			<td><?php echo round($netProfit,0) ?></td>
-																			<td>Otar Invest:</td>
-																			<td><?php echo round($OtarInvestLessMargin,0) ?></td>
-																			<td>Opening Investment:</td>
-																			<td><?php echo round($initialInvest,2) ?></td>
-																		</tr>
-																		<tr>
-																			<td>MFS Visibility:</td>
-																			<td><?php echo round($mfsProfits,0) ?></td>
-																			<td>MFS Invest:</td>
-																			<td><?php echo $mfsinvestment; ?></td>
-																			<td>New Investment:</td>
-																			<td><?php echo round($currentInvest,2) ?></td>
-																		</tr>	
-																			
-																		<tr>
-																			<td>SIM Visibility:</td>
-																			<td><?php echo round($CDProLoss ,0) ?></td>
-																			<td>SIM Invest:</td>
-																			<td><?php echo round($CDClosingstock,0) ?></td>
-																			<td>New Withdraw:</td>
-																			<td><?php echo round($currentWithdraw,2) ?></td>
-																		</tr>
-																		<tr>
-																		    
-																			<td>Set Visibility:</td>
-																			<td><?php echo round($MobProLoss ,0) ?></td>
-																			<td>Set Invest:</td>
-																			<td><?php echo round($mobClosingstock,0) ?></td>
-																			<td><b>Total Investment:</b></td>
-																			<td> <?php echo "<b>". round($currentinvestment,0)."</b>"; ?></td>
-																		</tr>
-																		
-																		<tr>
-																			
-																			<td>Card Visibility:</td>
-																			<td> <?php echo round($cardPL ,0) ?></td>
-																			<td>Card Invest:</td>
-																			<td><?php echo round($cAmntSum,0) ?></td>
-																			<!-- <td><?php echo round($cardClosingInvest,0) ?></td> -->
-																			<td>Visibility:</td>
-																			<td><?php echo round($totalVisibil-$regularExpenses ,0) ?></td>
-																		</tr>
-																		
-																		<tr>
-																			<td>Other Comission:</td>
-																			<td><?php echo round($otherComissionReceived,0); ?></td>
-																			<td><b>LMC Dues:</b></td>
-																			<td><b><?php echo round($totalCash,0)?></b></td>
-																			<td>Salary, Expenses Due</td>
-																			<td><?php echo round($pendSalExp,0) ?></td>
-																		</tr>
-																		
-																		<tr>
-																			<td>Online Tax:</td>
-																			<td><?php echo round(-$taxAmnt,2) ?></td>
-																			<td>Mobile Dues:</td>
-																			<td><?php echo round($totalMobile,0) ?></td>
-																			<td> Pending Profit:</td>
-																			<td><?php echo round($ProfitDueAmnt,2) ?></td>
-																		</tr>
-																		
-																		<tr>
-																		    <td>Reg Expenses:</td>
-																			<td><?php echo $regularExpenses?></td>
-																			<td>SIM Dues:</td>
-																			<td><?php echo round($totalSIM,0) ?></td>
-																			<td>Company Credit:</td>
-																			<td><?php echo round($companycreditnow,0) ?></td>
-																		</tr>
-																		
-																		<tr>
-																		    <td> <strong> Total Visibility: </strong></td>
-																			<td><strong>  <?php echo round($totalVisibil-$regularExpenses ,0) ?> </strong> </td>
-																			<td>DO-Advance</td>
-																			<td><?php echo round($DODue,0) ?></td>
-																			<td><strong>Current Investment:</strong></td>
-																			<td><strong><?php echo round($totalinvestment,0) ?></strong></td>
-																		</tr>
-																		
-																		<tr>
-																			<td>Salary, Expenses:</td>
-																			<td><?php echo round($ThisMonthsalary + $fixedExpenses,0) ?></td>
-																			
-																			<td><b>Bank Invest:</b></td>
-																			<td><b><?php echo round($BankClosing ,0) ?></b></td>
-																			
-																			<td>Original Investment:</td>
-																			<td> <?php echo round($currentinvestment,0); ?></td>
-																		</tr>
-																
-																		<tr>
-																			<td><strong> Net Visibility:</strong> </td>
-																			<td><strong> <?php echo round($netVisibil ,0) ?></strong> </td>
-																			<td>Total Invest:</td>
-																			<td><?php echo round($totalinvestment ,0) ?></td>
-																			<td>Closing Difference:</td>
-																			<?php
-																			if (round($closingDiff- $companycreditnow+$regularExpenses,0) != 0)
-																				echo "<td style=\"color:red\"><strong>";
-																			else
-																				echo "<td><strong>";
-																			echo round($closingDiff- $companycreditnow+$regularExpenses,0); 
-																			echo "</strong></td>";
-																			?>
-																		</tr>
-																		
-													</table>
-					</td>
-				</tr>
-			</table>
-		</div>
-		
-		<div id="center" class="SubDiv2" style=" border: 0px solid Blue;">	
-			<table cellpadding="0" cellspacing="0" border="1" align="center" id="header-fixed0">
-					<tr style="background-color: #ADBEE0;">
-							<td colspan="6" ><center><h4> Otar Details</h4></center></td>
-							<td colspan="6" ><center><h4> JazzCash Details</h4></center></td>
-							<td colspan="5" ><center><h4> Card Details</h4></center></td>
-					</tr>		
-					<tr style="background-color: #ADBEE0;">	
-							<!-- <td //style="width:95px">Date</td> -->
-							<th style="width:90px">Date</th>
-							<th style="width:70px">Opening</th>
-							<th style="width:70px">Lifting</th>
-							<th style="width:70px">InHand</th>
-							<th style="width:70px">Sale</th>
-							<th style="width:70px">Closing</th>
-							
-							<th style="width:70px">Opening</th>
-							<th style="width:70px">Lifting</th>
-							<th style="width:70px">Comission</th>
-							<th style="width:70px">Sending</th>
-							<th style="width:70px">Receiving</th>
-							<th style="width:70px">Closing</th>
-							
-							<th style="width:70px">Opening</th>
-							<th style="width:70px">Lifting</th>
-							<th style="width:70px">InHand</th>
-							<th style="width:70px">Sale</th>
-							<th style="width:70px">Closing</th>
-					</tr>
-			</table>
-		</div>
-		<div id="scrollBottom" class="SubDiv3" style=" border: 0px solid Blue;">	
-			<table cellpadding="0" cellspacing="0" border="1" align="center" id="header-fixed0">
-													<?php
-														$Opening1=$FrOtarOpening;
-														$Opening2=$FrmfsOpening;
-														$Opening3=$FrCardopening;
-														
-														for($i=$date_from; $i<=$date_to; $i+=86400)
-														{
-															echo "<tr>";
-															$cd=date("Y-m-d", $i);
-															
-														//	1st Table
-															$q=mysqli_query($con,"SELECT sum(loadAmnt) FROM tbl_mobile_load WHERE loadStatus='Received' AND loadEmp='$parentCompany' AND loadDate ='$cd' ");
-															WHILE($Data=mysqli_fetch_array($q))
-																{ $OtarLift = $Data['sum(loadAmnt)']; }
-															$inHand=$Opening1+$OtarLift;
-															$q=mysqli_query($con,"SELECT sum(loadTransfer) FROM tbl_mobile_load WHERE loadStatus='Sent' AND loadDate ='$cd' ");
-															WHILE($Data=mysqli_fetch_array($q))
-																{ $OtarSale = $Data['sum(loadTransfer)']; }
-															$closing1=$inHand-$OtarSale;
-															echo '<td style="width:90px">' . date("d-m-Y", $i)."</td>";
-															echo '<td style="width:70px">' . $Opening1 . "</td>";
-															echo '<td style="width:70px">' . $OtarLift . "</td>";
-															echo '<td style="width:70px">' . $inHand . "</td>";
-															echo '<td style="width:70px">' . $OtarSale . "</td>";
-															echo '<td style="width:70px"><b>' . $closing1 . "</b></td>";
-															$Opening1=$closing1;
-														
-														//  2nd Table
-															$q=mysqli_query($con,"SELECT sum(mfsAmnt) FROM tbl_financial_service WHERE mfsStatus='Received' AND mfsEmp='$parentCompany' AND mfsDate ='$cd' ");
-															$Data=mysqli_fetch_array($q);
-															$mfsLift = $Data['sum(mfsAmnt)'];
-															$q=mysqli_query($con,"SELECT sum(comAmnt) FROM comission WHERE comType='mfs comission' AND comEmp='$parentCompany' AND comDate ='$cd' ");
-															$Data=mysqli_fetch_array($q);
-															$mfscomission = $Data['sum(comAmnt)'];
-															$q1=mysqli_query($con,"SELECT sum(mfsAmnt) FROM tbl_financial_service WHERE mfsStatus='Sent' AND mfsDate ='$cd'  ");
-															$Data1=mysqli_fetch_array($q1);
-															$mfsSale = $Data1['sum(mfsAmnt)'];
-															$q2=mysqli_query($con,"SELECT sum(mfsAmnt) FROM tbl_financial_service WHERE mfsStatus='Received' AND mfsDate ='$cd' AND mfsEmp != '$parentCompany' ");
-															$Data2=mysqli_fetch_array($q2);
-															$mfsReceive = $Data2['sum(mfsAmnt)'];
-															$closing2=($Opening2+$mfsLift+$mfscomission+$mfsReceive)-$mfsSale;
-															echo '<td style="width:70px">' . $Opening2 . "</td>";
-															echo '<td style="width:70px">' . $mfsLift . "</td>";
-															echo '<td style="width:70px">' . $mfscomission . "</td>";
-															echo '<td style="width:70px">' . $mfsSale . "</td>";
-															echo '<td style="width:70px">' . $mfsReceive  . "</td>";
-															echo '<td style="width:70px"><b>' . $closing2 . "</b></td>";
-															 
-															$Opening2=$closing2;
-														
-														//	3rd Table
-															$q=mysqli_query($con,"SELECT sum(csQty) FROM tbl_cards WHERE csStatus='Received' AND csEmp='$parentCompany' AND csDate ='$cd' ");
-															$Data=mysqli_fetch_array($q);
-															$CardLift = $Data['sum(csQty)'];
-															$CardInHand=$Opening3+$CardLift;
-															$q=mysqli_query($con,"SELECT sum(csQty) FROM tbl_cards WHERE csStatus='Sent' AND csDate ='$cd' ");
-															$Data=mysqli_fetch_array($q);
-															$tbl_cards = $Data['sum(csQty)'];
-															$closing3=$CardInHand-$tbl_cards;
-															echo '<td style="width:70px">' . $Opening3 . "</td>";
-															echo '<td style="width:70px">' . $CardLift . "</td>";
-															echo '<td style="width:70px">' . $CardInHand . "</td>";
-															echo '<td style="width:70px">' . $tbl_cards . "</td>";
-															echo '<td style="width:70px"><b>' . $closing3 . "</b></td>";
-															echo "</tr>";
-															$Opening3=$closing3;
-														}
-													?>
-				
-			</table>
-		</div >
-	</div>
-<?php
-}
-else if($currentUserType=='Clerk')
-{
-?>
-<div class="container" id="cntnr" style="border: solid blue 0px">	
-		<div id="center" class="SubDiv1" style=" border: 0px solid Red;">	
-			<table cellpadding="0" cellspacing="0" border="0" align="center" id="tb102">
-				<tr>
-					<td> 
-						<table cellpadding="0" cellspacing="0" border="1" id="example">
-							<tr style="background-color: #ADBEE0;">
-								<td colspan="6" >
-									<center>
-										<h4> Target Summary</h4>
-									</center>
-								</td>
-							</tr>
-							<tr>
-								<td>Target Details:</td>
-								<td>Benchmark:</td>
-								<td>Remain WDs:</td>
-								<td>Status:</td>
-								<td>%Age Complete:</td>
-								<td>Per Day Avg:</td>
-							</tr>
-							<tr>
-								<td>Otar Target:</td>
-								<td><?php echo $FrOtartarget; ?></td>
-								<td bgcolor="#0099cc" style="text-align: center; font: 16px arial Black; color: Black"><?php echo $ThisDay ?></td>
-								<td>Total %:</td>
-								<td> 100 % </td>
-								<td><?php echo round($FrPerDayAvgOtar,2) ?> </td>
-							</tr>
-																		<tr>
-																			<td>Otar Achieved:</td>
-																			<td><?php echo $FrOtarAchieved ?></td>
-																			<td rowspan="2" bgcolor="#00bfff" style="text-align: center; font: 30px arial Black;"><?php echo $CurrentDay ?></td>
-																			<td>Achieved %:</td>
-																			<td><?php if($FrOtarAchievedPercent=='emp') echo "Target NA"; else echo round($FrOtarAchievedPercent,2) ?></td>
-																			<td>
-																			</td>
-																		</tr>
-																		<tr>
-																			<td>Otar Remain:</td>
-																			<td><?php echo $FrOtartargetRemain ?></td>
-																			<td>Remain %:</td>
-																			<td> <?php if($FrOtarRemainPercent=='emp') echo "Target NA"; else echo round($FrOtarRemainPercent,2) ?></td>
-																			<td>
-																			</td>
-																		</tr>
-																		<tr>
-																			<td>Card Target:</td>
-																			<td> <?php echo $FrCardtarget ?></td>
-																			<td rowspan="3" bgcolor="#0099cc" style="text-align: center; font: 48px arial Black;"><?php echo $LastDay ?></td>
-																			<td>Total %:</td>
-																			<td> 100 % </td>
-																			<td> <?php echo round($FrPerDayAvgCard,2) ?></td>
-																		</tr>
-																		<tr>
-																			<td>Card Achieved:</td>
-																			<td> <?php echo $FrCardAchieved ?></td>
-																			
-																			<td>Achieved %:</td>
-																			<td>  <?php if($FrCardAchievedPercent=='emp') echo "Target NA"; else echo round($FrCardAchievedPercent,2) ?></td>
-																			<td>
-																			</td>
-																		</tr>
-																		<tr>
-																			<td>Card Remain:</td>
-																			<td> <?php echo $FrCardtargetRemain ?></td>
-																			
-																			<td>Remain:</td>
-																			<td><?php if($FrCardRemainPercent=='emp') echo "Target NA"; else echo round($FrCardRemainPercent,2) ?></td> 
-																			<td>
-																			</td>
-																		</tr>
-																		<tr>
-																			
-																			<td>Device Target</td>
-																			<td> <?php echo $mobitarget ?></td>
-																			<td>Total %</td>
-																			<td> 100 %</td>
-																			<td>SIM Target</td>
-																			<td> <?php echo $SIMtarget ?></td>
-																		</tr>
-																		<tr>
-																			
-																			<td> Device Achieved</td>
-																			<td><?php echo $dmAchAchieved ?></td>
-																			<td> Dev. Ach. %</td>
-																			<td> <?php if ($mobitarget!='' or $mobitarget!=0) echo round ((($dmAchAchieved/$mobitarget)*100),2); else echo "Target NA"; ?> %</td>
-																			<td>SIM Achieved</td>
-																			<td> <?php echo $smAchAchieved ?></td>
-							                                            </tr>
-							                                            <tr>
-																			
-																			<td> Device Remain</td>
-																			<td> <?php echo $mobitarget-$dmAchAchieved ?></td>
-																			
-																			<td>Dev. Remain %</td>
-																			<td> <?php if ($mobitarget!='' or $mobitarget!=0) echo round ( ((($mobitarget-$dmAchAchieved)/$mobitarget)*100),2); else echo "Target NA"; ?>%</td>
-																			<td> SIM Remain</td>
-																			<td> <?php echo $SIMtarget-$smAchAchieved ?></td>
-							                                            </tr>
-								</table>
-					</td>
-					<td colspan="2"> 
-													<table cellpadding="0" cellspacing="0" border="1" id="">
-																		<tr>
-																			<td>Otar Invest:</td>
-																			<td><?php echo round($OtarInvestLessMargin,0) ?></td>
-																			<td>Opening Investment:</td>
-																			<td><?php echo round($initialInvest,2) ?></td>
-																		</tr>
-																		<tr>
-																			<td>MFS Invest:</td>
-																			<td><?php echo $mfsinvestment; ?></td>
-																			<td>New Investment:</td>
-																			<td><?php echo round($currentInvest,2) ?></td>
-																		</tr>	
-																			
-																		<tr>
-																			<td>SIM Invest:</td>
-																			<td><?php echo round($CDClosingstock,0) ?></td>
-																			<td>New Withdraw:</td>
-																			<td><?php echo round($currentWithdraw,2) ?></td>
-																		</tr>
-																		<tr>
-																		    
-																			<td>Set Invest:</td>
-																			<td><?php echo round($mobClosingstock,0) ?></td>
-																			<td><b>Total Investment:</b></td>
-																			<td> <?php echo "<b>". round($currentinvestment,0)."</b>"; ?></td>
-																		</tr>
-																		
-																		<tr>
-																			
-																			<td>Card Invest:</td>
-																			<td><?php echo round($cardClosingInvest,0) ?></td>
-																			<td>Sabiqa:</td>
-																			<td><?php //echo round($totalVisibil-$regularExpenses ,0) ?></td>
-																		</tr>
-																		
-																		<tr>
-																			<td><b>LMC Dues:</b></td>
-																			<td><b><?php echo round($totalCash,0)?></b></td>
-																			<td>Salary, Expenses Due:</td>
-																			<td><?php echo round($pendSalExp,0) ?></td>
-																		</tr>
-																		<tr>
-																			<td>Mobile Dues:</td>
-																			<td><?php echo round($totalMobile,0) ?></td>
-																			<td> Pending Profit</td>
-																			<td><?php echo round($ProfitDueAmnt,2) ?></td>
-																		</tr>
-																		<tr>
-																		    <td>SIM Dues:</td>
-																			<td><?php echo round($totalSIM,0) ?></td>
-																			<td>Company Credit:</td>
-																			<td><?php echo round($companycreditnow,0) ?></td>
-																		</tr>
-																		<tr>
-																			<td>DO-Advance</td>
-																			<td><?php echo round($DODue,0) ?></td>
-																		    <td><strong>Current Investment:</strong></td>
-																			<td><strong><?php echo round($totalinvestment,0) ?></strong></td>
-																		</tr>
-																		<tr>
-																		<tr>
-																			<td>Total Invest:</td>
-																			<td><?php echo round($totalinvestment ,0) ?></td>
-																			<td>Closing Difference:</td>
-																			<?php
-																			if (round($closingDiff- $companycreditnow+$regularExpenses,0) != 0)
-																				echo "<td style=\"color:red\"><strong>";
-																			else
-																				echo "<td><strong>";
-																			echo round($closingDiff- $companycreditnow+$regularExpenses,0); 
-																			echo "</strong></td>";
-																			?>
-																		</tr>
-																		
-													</table>
-					</td>
-				</tr>
-			</table>
-		</div>
-		
-		<div id="center" class="SubDiv2" style=" border: 0px solid Blue;">	
-			<table cellpadding="0" cellspacing="0" border="1" align="center" id="header-fixed0">
-					<tr style="background-color: #ADBEE0;">
-							<td colspan="6" ><center><h4> Otar Details</h4></center></td>
-							<td colspan="6" ><center><h4> JazzCash Details</h4></center></td>
-							<td colspan="5" ><center><h4> Card Details</h4></center></td>
-					</tr>		
-					<tr style="background-color: #ADBEE0;">	
-							<!-- <td //style="width:95px">Date</td> -->
-							<th style="width:90px">Date</th>
-							<th style="width:70px">Opening</th>
-							<th style="width:70px">Lifting</th>
-							<th style="width:70px">InHand</th>
-							<th style="width:70px">Sale</th>
-							<th style="width:70px">Closing</th>
-							
-							<th style="width:70px">Opening</th>
-							<th style="width:70px">Lifting</th>
-							<th style="width:70px">Comission</th>
-							<th style="width:70px">Sending</th>
-							<th style="width:70px">Receiving</th>
-							<th style="width:70px">Closing</th>
-							
-							<th style="width:70px">Opening</th>
-							<th style="width:70px">Lifting</th>
-							<th style="width:70px">InHand</th>
-							<th style="width:70px">Sale</th>
-							<th style="width:70px">Closing</th>
-					</tr>
-			</table>
-		</div>
-		<div id="scrollBottom" class="SubDiv3" style=" border: 0px solid Blue;">	
-			<table cellpadding="0" cellspacing="0" border="1" align="center" id="header-fixed0">
-													<?php
-														$Opening1=$FrOtarOpening;
-														$Opening2=$FrmfsOpening;
-														$Opening3=$FrCardopening;
-														
-														for($i=$date_from; $i<=$date_to; $i+=86400)
-														{
-															echo "<tr>";
-															$cd=date("Y-m-d", $i);
-															
-														//	1st Table
-															$q=mysqli_query($con,"SELECT sum(loadAmnt) FROM tbl_mobile_load WHERE loadStatus='Received' AND loadEmp='$parentCompany' AND loadDate ='$cd' ");
-															WHILE($Data=mysqli_fetch_array($q))
-																{ $OtarLift = $Data['sum(loadAmnt)']; }
-															$inHand=$Opening1+$OtarLift;
-															$q=mysqli_query($con,"SELECT sum(loadTransfer) FROM tbl_mobile_load WHERE loadStatus='Sent' AND loadDate ='$cd' ");
-															WHILE($Data=mysqli_fetch_array($q))
-																{ $OtarSale = $Data['sum(loadTransfer)']; }
-															$closing1=$inHand-$OtarSale;
-															echo '<td style="width:90px">' . date("d-m-Y", $i)."</td>";
-															echo '<td style="width:70px">' . $Opening1 . "</td>";
-															echo '<td style="width:70px">' . $OtarLift . "</td>";
-															echo '<td style="width:70px">' . $inHand . "</td>";
-															echo '<td style="width:70px">' . $OtarSale . "</td>";
-															echo '<td style="width:70px"><b>' . $closing1 . "</b></td>";
-															$Opening1=$closing1;
-														
-														//  2nd Table
-															$q=mysqli_query($con,"SELECT sum(mfsAmnt) FROM tbl_financial_service WHERE mfsStatus='Received' AND mfsEmp='$parentCompany' AND mfsDate ='$cd' ");
-															$Data=mysqli_fetch_array($q);
-															$mfsLift = $Data['sum(mfsAmnt)'];
-															$q=mysqli_query($con,"SELECT sum(comAmnt) FROM comission WHERE comType='mfs comission' AND comEmp='$parentCompany' AND comDate ='$cd' ");
-															$Data=mysqli_fetch_array($q);
-															$mfscomission = $Data['sum(comAmnt)'];
-															$q1=mysqli_query($con,"SELECT sum(mfsAmnt) FROM tbl_financial_service WHERE mfsStatus='Sent' AND mfsDate ='$cd'  ");
-															$Data1=mysqli_fetch_array($q1);
-															$mfsSale = $Data1['sum(mfsAmnt)'];
-															$q2=mysqli_query($con,"SELECT sum(mfsAmnt) FROM tbl_financial_service WHERE mfsStatus='Received' AND mfsDate ='$cd' AND mfsEmp != '$parentCompany' ");
-															$Data2=mysqli_fetch_array($q2);
-															$mfsReceive = $Data2['sum(mfsAmnt)'];
-															$closing2=($Opening2+$mfsLift+$mfscomission+$mfsReceive)-$mfsSale;
-															echo '<td style="width:70px">' . $Opening2 . "</td>";
-															echo '<td style="width:70px">' . $mfsLift . "</td>";
-															echo '<td style="width:70px">' . $mfscomission . "</td>";
-															echo '<td style="width:70px">' . $mfsSale . "</td>";
-															echo '<td style="width:70px">' . $mfsReceive  . "</td>";
-															echo '<td style="width:70px"><b>' . $closing2 . "</b></td>";
-															 
-															$Opening2=$closing2;
-														
-														//	3rd Table
-															$q=mysqli_query($con,"SELECT sum(csQty) FROM tbl_cards WHERE csStatus='Received' AND csEmp='$parentCompany' AND csDate ='$cd' ");
-															$Data=mysqli_fetch_array($q);
-															$CardLift = $Data['sum(csQty)'];
-															$CardInHand=$Opening3+$CardLift;
-															$q=mysqli_query($con,"SELECT sum(csQty) FROM tbl_cards WHERE csStatus='Sent' AND csDate ='$cd' ");
-															$Data=mysqli_fetch_array($q);
-															$tbl_cards = $Data['sum(csQty)'];
-															$closing3=$CardInHand-$tbl_cards;
-															echo '<td style="width:70px">' . $Opening3 . "</td>";
-															echo '<td style="width:70px">' . $CardLift . "</td>";
-															echo '<td style="width:70px">' . $CardInHand . "</td>";
-															echo '<td style="width:70px">' . $tbl_cards . "</td>";
-															echo '<td style="width:70px"><b>' . $closing3 . "</b></td>";
-															echo "</tr>";
-															$Opening3=$closing3;
-														}
-													?>
-				
-			</table>
-		</div >
-	</div>
 
-<?php
-}
-else {
-	echo "<div class='text-center mt-20 text-xl font-semibold text-gray-700'>Welcome ".htmlspecialchars($currentActiveUser)."</div>";
-}
-?>
-<?php
-$content = ob_get_clean();
-include '../layouts/main_layout.php';
-?>
+        <!-- Top Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <!-- Net Visibility -->
+            <div class="bg-white rounded-lg shadow p-6 border-l-4 <?php echo $netVisibility >= 0 ? 'border-green-500' : 'border-red-500'; ?>">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500 uppercase">Net Visibility</p>
+                        <p class="text-2xl font-bold <?php echo $netVisibility >= 0 ? 'text-green-700' : 'text-red-700'; ?>"><?php echo number_format($netVisibility); ?></p>
+                    </div>
+                    <div class="p-3 rounded-full bg-gray-100 text-gray-600">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                    </div>
+                </div>
+                <div class="mt-2 text-xs text-gray-500">Profit - Expenses</div>
+            </div>
+
+            <!-- Total Investment -->
+            <div class="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+                 <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500 uppercase">Total Inventory</p>
+                        <p class="text-2xl font-bold text-blue-700"><?php echo number_format($totalInvestment); ?></p>
+                    </div>
+                     <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                    </div>
+                </div>
+                 <div class="mt-2 text-xs text-gray-500">Stock Value</div>
+            </div>
+
+             <!-- Expenses -->
+            <div class="bg-white rounded-lg shadow p-6 border-l-4 border-orange-500">
+                 <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500 uppercase">Total Expenses</p>
+                        <p class="text-2xl font-bold text-orange-700"><?php echo number_format($totalExpenses); ?></p>
+                    </div>
+                     <div class="p-3 rounded-full bg-orange-100 text-orange-600">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                </div>
+                 <div class="mt-2 text-xs text-gray-500">Fixed + Regular + Salary</div>
+            </div>
+            
+             <!-- Bank -->
+            <div class="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500">
+                 <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-sm font-medium text-gray-500 uppercase">Bank / Cash</p>
+                        <p class="text-2xl font-bold text-purple-700"><?php echo number_format($investments['Bank']); ?></p>
+                    </div>
+                     <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"></path></svg>
+                    </div>
+                </div>
+                 <div class="mt-2 text-xs text-gray-500">Cash Flow Closing</div>
+            </div>
+        </div>
+        
+        <!-- Detailed Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            <!-- Targets vs Achieved -->
+            <div class="bg-white shadow rounded-lg p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Targets vs Achieved</h3>
+                <div class="space-y-4">
+                    <!-- Otar -->
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>Otar Load</span>
+                            <span class="font-medium"><?php echo number_format($achieved['Otar']); ?> / <?php echo number_format($targets['Otar']); ?></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="bg-blue-600 h-2.5 rounded-full" style="width: <?php echo ($targets['Otar'] > 0 ? ($achieved['Otar']/$targets['Otar'])*100 : 0); ?>%"></div>
+                        </div>
+                    </div>
+                     <!-- Cards -->
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>Cards</span>
+                            <span class="font-medium"><?php echo number_format($achieved['Card']); ?> / <?php echo number_format($targets['Card']); ?></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="bg-purple-600 h-2.5 rounded-full" style="width: <?php echo ($targets['Card'] > 0 ? ($achieved['Card']/$targets['Card'])*100 : 0); ?>%"></div>
+                        </div>
+                    </div>
+                     <!-- Mobile -->
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>Mobile Devices</span>
+                            <span class="font-medium"><?php echo number_format($achieved['Mobile']); ?> / <?php echo number_format($targets['Mobile']); ?></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="bg-pink-600 h-2.5 rounded-full" style="width: <?php echo ($targets['Mobile'] > 0 ? ($achieved['Mobile']/$targets['Mobile'])*100 : 0); ?>%"></div>
+                        </div>
+                    </div>
+                     <!-- SIM -->
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>SIMs</span>
+                            <span class="font-medium"><?php echo number_format($achieved['SIM']); ?> / <?php echo number_format($targets['SIM']); ?></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div class="bg-yellow-500 h-2.5 rounded-full" style="width: <?php echo ($targets['SIM'] > 0 ? ($achieved['SIM']/$targets['SIM'])*100 : 0); ?>%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Investment Breakdown -->
+            <div class="bg-white shadow rounded-lg p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Inventory Value</h3>
+                <div class="relative h-64">
+                    <canvas id="investChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Profit Breakdown Table -->
+            <div class="bg-white shadow rounded-lg overflow-hidden lg:col-span-2">
+                 <div class="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                    <h3 class="text-lg font-bold text-gray-800">Profitability Breakdown</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm text-left">
+                        <thead class="bg-gray-100 text-gray-500 uppercase">
+                            <tr>
+                                <th class="px-6 py-3">Category</th>
+                                <th class="px-6 py-3 text-right">Profit</th>
+                                <th class="px-6 py-3 text-right">Investment</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            <tr>
+                                <td class="px-6 py-3 font-medium">Otar / Load</td>
+                                <td class="px-6 py-3 text-right text-green-600"><?php echo number_format($profits['Otar']); ?></td>
+                                <td class="px-6 py-3 text-right"><?php echo number_format($investments['Otar']); ?></td>
+                            </tr>
+                            <tr>
+                                <td class="px-6 py-3 font-medium">MFS (JazzCash/EasyPaisa)</td>
+                                <td class="px-6 py-3 text-right text-green-600"><?php echo number_format($profits['MFS']); ?></td>
+                                <td class="px-6 py-3 text-right"><?php echo number_format($investments['MFS']); ?></td>
+                            </tr>
+                             <tr>
+                                <td class="px-6 py-3 font-medium">Cards</td>
+                                <td class="px-6 py-3 text-right text-green-600"><?php echo number_format($profits['Cards']); ?></td>
+                                <td class="px-6 py-3 text-right"><?php echo number_format($investments['Card']); ?></td>
+                            </tr>
+                             <tr>
+                                <td class="px-6 py-3 font-medium">Other Commission</td>
+                                <td class="px-6 py-3 text-right text-green-600"><?php echo number_format($profits['OtherCommission']); ?></td>
+                                <td class="px-6 py-3 text-right">-</td>
+                            </tr>
+                             <tr class="bg-gray-50 font-bold">
+                                <td class="px-6 py-3">Total</td>
+                                <td class="px-6 py-3 text-right"><?php echo number_format($totalProfit); ?></td>
+                                <td class="px-6 py-3 text-right"><?php echo number_format($totalInvestment); ?></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <footer class="bg-white border-t mt-12 py-8">
+        <div class="max-w-7xl mx-auto px-4 text-center text-gray-400 text-sm">
+            &copy; <?php echo date('Y'); ?> VibeCoded Modern App. 
+        </div>
+    </footer>
+
+    <script>
+        const ctx = document.getElementById('investChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Otar', 'MFS', 'Card', 'Mobile', 'SIM'],
+                datasets: [{
+                    data: [
+                        <?php echo $investments['Otar']; ?>, 
+                        <?php echo $investments['MFS']; ?>, 
+                        <?php echo $investments['Card']; ?>, 
+                        <?php echo $investments['Mobile']; ?>, 
+                        <?php echo $investments['SIM']; ?>
+                    ],
+                    backgroundColor: [
+                        '#3b82f6', // blue
+                        '#10b981', // green
+                        '#8b5cf6', // purple
+                        '#ec4899', // pink
+                        '#f59e0b'  // yellow
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

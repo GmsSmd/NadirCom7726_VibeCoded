@@ -1,830 +1,215 @@
 <?php
-include_once('../session.php');
-$pNameHere = $_GET['for'];
-include_once('includes/formula1.php');
-include_once('includes/globalvar.php');
-?>
-<head>
-			<title>Sales</title>
-			<style>
-			<?php
-			include_once('styles/navbarstyle.php');
-			include_once('styles/tablestyle.php');
-			include_once('includes/navbar.php');
-			?>
-			</style>
-			</head>
-			
-			
-			
-			
-			
-	<div class="container" align="center">	
-							<center>
-								<caption> <h2>Sale Summary</h2></caption>
-							</center>
-							
-			<div style="border: solid black 0px;" align="center" class="doBar">
-					<?php
-						$doQ=mysqli_query($con,"SELECT pName from products");
-						while($data=mysqli_fetch_array($doQ))
-							{
-								$name=$data['pName'];
-								if($name== $pNameHere)
-									$nm='doLinkSelected';
-								else
-									$nm='doLink';
-								?>
-								<a href="salesummary.php?for=<?php echo $name;?>" id="<?php echo $nm;?>" class="button">
-								<?php
-								echo $data['pName']."</a>";
-							}
-					?>
-			</div>
-						<?php
-			if($pNameHere=='Otar')
-						{
-						?>
-			
-							<div  style="border: solid black 0px; ">
-											<form  action="" method="POST">
-													<table cellpadding="0" cellspacing="0" border="0" class="table" id="headTable" >
-														<tr>
-																	<td style="text-align: right;"> Employee: </td>
-																	<td style="text-align: left;" >
-																			<select name="EmpSelect" id="sBox">
-																					<option >---</option>
-																					<?php
-																						$doQ=mysqli_query($con,"SELECT EmpName from empinfo WHERE EmpStatus='Active' Order by sort_order ASC");
-																						while($data=mysqli_fetch_array($doQ))
-																							{
-																								if( $data['EmpName']==$_POST['EmpSelect'] )
-																									echo "<option selected>";
-																								else
-																									echo "<option>";
-																								echo $data['EmpName'];
-																								echo "</option>";
-																							}
-																					?>
-																			</select>	
-																	</td>
-														
-																	
-																	<td style="text-align: right;"> Date From:</td>
-																	<td style="text-align: left;">
-																			<?php
-																			if (isset($_POST['ShowOtarSales']))
-																				$strDate1=$_POST['txtDateFrom'];
-																			else
-																				$strDate1= $CurrentDate; //$QueryFD date('Y-m-d');
-																			
-																			echo "<input type=\"date\" value= \"$strDate1\"  name=\"txtDateFrom\" id=\"tBox\" >";
-																			?>
-																	</td>
-															
-																	<td style="text-align: right;"> Date To:</td>
-																	<td style="text-align: left;">
-																			<?php
-																			if (isset($_POST['ShowOtarSales']))
-																				$strDate2=$_POST['txtDateTo'];
-																			else
-																				$strDate2= date('Y-m-d');
-																			
-																			echo "<input type=\"date\" value= \"$strDate2\"  name=\"txtDateTo\" id=\"tBox\">";
-																			?>
-																	
-										 								<input type="submit"  value="Show" name="ShowOtarSales" id="Btn" onclick="checkInput()">
-																	</td>
-																</tr>
-																
-													</table>
-											</form>
-													
-							</div>
-							<table cellpadding="0" cellspacing="0" border="1" class="" id="dbResult">
-								<thead>
-									<tr>
-										
-										<th>Date</th>
-										<th>Employee</th>
-										<th>Amount</th>
-										<th>Sent By</th>
-										<th>Comments</th>
-										<th>Action</th>
-									</tr>
-								</thead>
-											<tbody>
-													<?php 
-													$AmntSum=0;
-													if (isset($_POST['ShowOtarSales']))
-													{
-																$QtySum=0;
-																$sql = mysqli_query($con,"$NewQuery")or die(mysqli_query());
-																	WHILE($Data=mysqli_fetch_array($sql))
-																{
-																		$Dat=$Data['loadDate'];
-																		$thisEmp=$Data['loadEmp'];
-																		$Amnt= $Data['loadAmnt'];
-																		$user=$Data['User'];
-																		$Cmnts= $Data['loadComments'];
-																		$AmntSum=$AmntSum + $Amnt;
-																	$id = $Data['loadID'];
-																	$d=strtotime($Dat);
-																	$dtNow=date("d-M-Y", $d);
-																	echo "<tr>";
-																	echo "<td style=\"text-align: Center;\">". $dtNow ."</td>";
-																	echo "<td>". $thisEmp ."</td>";
-																	echo "<td>".$Amnt."</td>";
-																	echo "<td>".$user."</td>";
-																	echo "<td>".$Cmnts."</td>";
-																	if ($currentUserType=="Admin" && $Dat>=$QueryFD && $Dat<=$QueryLD)
-																		echo "<td><a onClick=\"javascript: return confirm('Please confirm Deletion');\" href=\"delete/delsalesummary.php?ID=".$id."&for=".$pNameHere."\" id=\"LinkBtnDel\">Delete</a></td>";
-																	else if($currentUserType=="Manager" && $Dat==date("Y-m-d"))
-																		echo "<td><a onClick=\"javascript: return confirm('Please confirm Deletion');\" href=\"delete/delsalesummary.php?ID=".$id."&for=".$pNameHere."\" id=\"LinkBtnDel\">Delete</a></td>";
-																	else
-																		echo "<td></td>";
-																	echo "</tr>";
-																
-																}
-													}
-													?>
-											</tbody>
-											<tfoot >
-								<tr style="border: solid black 2px;"  >
-								<td colspan="2" style="text-align: Right;" > <b> TOTAL AMOUNT: </b></td>
-								<td colspan="1" style="text-align: right;" > <b><?php echo $AmntSum; ?></b></td>
-								<td colspan="3" > </td>
-								
-								</tr>
-								</tfoot>
-							</table>
-						<?php
-						}
-			else if($pNameHere=='MFS')
-						{
-						?>
-			
-							<div  style="border: solid black 0px; ">
-											<form  action="" method="POST">
-													<table cellpadding="0" cellspacing="0" border="0" class="table" id="headTable" >
-														<tr>
-																	<td style="text-align: right;"> Employee: </td>
-																	<td style="text-align: left;" >
-																			<select name="EmpSelect" id="sBox">
-																					<option >---</option>
-																					<?php
-																						$doQ=mysqli_query($con,"SELECT EmpName from empinfo WHERE EmpStatus='Active'Order by sort_order ASC");
-																						while($data=mysqli_fetch_array($doQ))
-																							{
-																								if( $data['EmpName']==$_POST['EmpSelect'] )
-																									echo "<option selected>";
-																								else
-																									echo "<option>";
-																								echo $data['EmpName'];
-																								echo "</option>";
-																							}
-																					?>
-																			</select>	
-																	</td>
-																	<td style="text-align: right;"> Date From:</td>
-																	<td style="text-align: left;">
-																			<?php
-																			if (isset($_POST['ShowmfsSales']))
-																				$strDate1=$_POST['txtDateFrom'];
-																			else
-																				$strDate1=$CurrentDate; //$QueryFD date('Y-m-d');
-																			
-																			echo "<input type=\"date\" value= \"$strDate1\"  name=\"txtDateFrom\" id=\"tBox\" >";
-																			?>
-																	</td>
-															
-																	<td style="text-align: right;"> Date To:</td>
-																	<td style="text-align: left;">
-																			<?php
-																			if (isset($_POST['ShowmfsSales']))
-																				$strDate2=$_POST['txtDateTo'];
-																			else
-																				$strDate2= date('Y-m-d');
-																			
-																			echo "<input type=\"date\" value= \"$strDate2\"  name=\"txtDateTo\" id=\"tBox\">";
-																			?>
-																	
-										 								<input type="submit"  value="Show" name="ShowmfsSales" id="Btn" onclick="checkInput()">
-																	</td>
-																</tr>
-																
-													</table>
-											</form>
-													
-							</div>
-							<h2> MFS Sent</h2>
-							<table cellpadding="0" cellspacing="0" border="1" class="" id="dbResult">
-								<thead>
-									<tr>
-										
-										<th>Date</th>
-										<th>Employee</th>
-										<th>Sent Amount</th>
-										<th>Sent By</th>
-										<th>Comments</th>
-										<th>Action</th>
-									</tr>
-								</thead>
-											<tbody>
-													<?php 
-													$AmntSum=0;
-													if (isset($_POST['ShowmfsSales']))
-													{
-																$QtySum=0;
-																$sql = mysqli_query($con,"$NewQuery")or die(mysqli_query());
-																	WHILE($Data=mysqli_fetch_array($sql))
-																{
-																		$Dat=$Data['mfsDate'];
-																		$thisEmp=$Data['mfsEmp'];
-																		$Amnt= $Data['mfsAmnt'];
-																		$user= $Data['User'];
-																		$Cmnts= $Data['mfsComments'];
-																		
-																		$AmntSum=$AmntSum + $Amnt;
-																	$id = $Data['mfsID'];
-																$d=strtotime($Dat);
-																	$dtNow=date("d-M-Y", $d);
-																	echo "<tr>";
-																	echo "<td style=\"text-align: Center;\">". $dtNow ."</td>";
-																	echo "<td>". $thisEmp ."</td>";
-																	echo "<td>".$Amnt."</td>";
-																	echo "<td>".$user."</td>";
-																	echo "<td>".$Cmnts."</td>";
-																	if ($currentUserType=="Admin" && $Dat>=$QueryFD && $Dat<=$QueryLD)
-																		echo "<td><a onClick=\"javascript: return confirm('Please confirm Deletion');\" href=\"delete/delsalesummary.php?ID=".$id."&for=".$pNameHere."\" id=\"LinkBtnDel\">Delete</a></td>";
-																	else if($currentUserType=="Manager" && $Dat==date("Y-m-d"))
-																		echo "<td><a onClick=\"javascript: return confirm('Please confirm Deletion');\" href=\"delete/delsalesummary.php?ID=".$id."&for=".$pNameHere."\" id=\"LinkBtnDel\">Delete</a></td>";
-																	else
-																		echo "<td></td>";
-																	echo "</tr>";
-																
-																}
-													}
-													?>
-											</tbody>
-											<tfoot >
-								<tr style="border: solid black 2px;"  >
-								<td colspan="2" style="text-align: Right;" > <b> TOTAL AMOUNT: </b></td>
-								<td colspan="1" style="text-align: right;" > <b><?php echo $AmntSum; ?></b></td>
-								<td colspan="3" > </td>
-								
-								</tr>
-								</tfoot>
-							</table>
-							<br>
-							<br>
-														<h2> MFS Received</h2>
+// Modernized salesummary.php
+require_once __DIR__ . '/../config.php';
+require_once __DIR__ . '/../session.php';
 
-							<table cellpadding="0" cellspacing="0" border="1" class="" id="dbResult">
-								<thead>
-									<tr>
-										
-										<th>Date</th>
-										<th>Employee</th>
-										<th>Received Amount</th>
-										<th>Received By</th>
-										<th>Comments</th>
-										<th>Action</th>
-									</tr>
-								</thead>
-											<tbody>
-													<?php 
-													$AmntSum=0;
-													if (isset($_POST['ShowmfsSales']))
-													{
-																$QtySum=0;
-																$sql = mysqli_query($con,"$NewQuery1")or die(mysqli_query());
-																	WHILE($Data=mysqli_fetch_array($sql))
-																{
-																		$Dat=$Data['mfsDate'];
-																		$thisEmp=$Data['mfsEmp'];
-																		$user=$Data['User'];
-																		$Amnt= $Data['mfsAmnt'];
-																		$Cmnts= $Data['mfsComments'];
-																		
-																		$AmntSum=$AmntSum + $Amnt;
-																	$id = $Data['mfsID'];
-																$d=strtotime($Dat);
-																	$dtNow=date("d-M-Y", $d);
-																	echo "<tr>";
-																	echo "<td style=\"text-align: Center;\">". $dtNow ."</td>";
-																	echo "<td>". $thisEmp ."</td>";
-																	echo "<td>".$Amnt."</td>";
-																	echo "<td>".$user."</td>";
-																	echo "<td>".$Cmnts."</td>";
-																	if ($currentUserType=="Admin" && $Dat>=$QueryFD && $Dat<=$QueryLD)
-																		echo "<td><a onClick=\"javascript: return confirm('Please confirm Deletion');\" href=\"delete/delsalesummary.php?ID=".$id."&for=".$pNameHere."\" id=\"LinkBtnDel\">Delete</a></td>";
-																	else if($currentUserType=="Manager" && $Dat==date("Y-m-d"))
-																		echo "<td><a onClick=\"javascript: return confirm('Please confirm Deletion');\" href=\"delete/delsalesummary.php?ID=".$id."&for=".$pNameHere."\" id=\"LinkBtnDel\">Delete</a></td>";
-																	else
-																		echo "<td></td>";
-																	echo "</tr>";
-																
-																}
-													}
-													?>
-											</tbody>
-											<tfoot >
-								<tr style="border: solid black 2px;"  >
-								<td colspan="2" style="text-align: Right;" > <b> TOTAL AMOUNT: </b></td>
-								<td colspan="1" style="text-align: right;" > <b><?php echo $AmntSum; ?></b></td>
-								<td colspan="3" > </td>
-								
-								</tr>
-								</tfoot>
-							</table>
-							
-							
-						<?php
-						}
-			else if($pNameHere=='Card')
-						{
-						?>
-			
-							<div  style="border: solid black 0px; ">
-											<form  action="" method="POST">
-													<table cellpadding="0" cellspacing="0" border="0" class="table" id="headTable" >
-														<tr>
-																	<td style="text-align: right;"> Employee: </td>
-																	<td style="text-align: left;" >
-																			<select name="EmpSelect" id="sBox">
-																					<option >---</option>
-																					<?php
-																						$doQ=mysqli_query($con,"SELECT EmpName from empinfo WHERE EmpStatus='Active'Order by sort_order ASC");
-																						while($data=mysqli_fetch_array($doQ))
-																							{
-																								if( $data['EmpName']==$_POST['EmpSelect'] )
-																									echo "<option selected>";
-																								else
-																									echo "<option>";
-																								echo $data['EmpName'];
-																								echo "</option>";
-																							}
-																					?>
-																			</select>	
-																	</td>
-																	<td style="text-align: right;"> Card Type: </td>
-																	<td style="text-align: left;" >
-																			<select name="SubPselect" id="sBox">
-																				<option >---</option>
-																				<?php
-																					$doQ=mysqli_query($con,"SELECT typeName from types WHERE productName='Card' AND isActive=1");
-																						while($data=mysqli_fetch_array($doQ))
-																						{
-																							if($data['typeName']==$_POST['SubPselect'])
-																								echo "<option selected>";
-																							else 
-																								echo "<option>";
-																							echo $data['typeName'];
-																							echo "<br>";
-																							echo "</option>";
-																						}
-																				?>
-																			</select>	
-																	</td>
-																	<td style="text-align: right;"> Date From:</td>
-																	<td style="text-align: left;">
-																			<?php
-																			if (isset($_POST['Showtbl_cardss']))
-																				$strDate1=$_POST['txtDateFrom'];
-																			else
-																				$strDate1=$CurrentDate; //$QueryFD date('Y-m-d');
-																			
-																			echo "<input type=\"date\" value= \"$strDate1\"  name=\"txtDateFrom\" id=\"tBox\" >";
-																			?>
-																	</td>
-															
-																	<td style="text-align: right;"> Date To:</td>
-																	<td style="text-align: left;">
-																			<?php
-																			if (isset($_POST['Showtbl_cardss']))
-																				$strDate2=$_POST['txtDateTo'];
-																			else
-																				$strDate2= date('Y-m-d');
-																			
-																			echo "<input type=\"date\" value= \"$strDate2\"  name=\"txtDateTo\" id=\"tBox\">";
-																			?>
-																	
-										 								<input type="submit"  value="Show" name="Showtbl_cardss" id="Btn" onclick="checkInput()">
-																	</td>
-																</tr>
-																
-													</table>
-											</form>
-													
-							</div>
-							<table cellpadding="0" cellspacing="0" border="1" class="" id="dbResult">
-								<thead>
-									<tr>
-										
-										<th>Date</th>
-										<th>Employee</th>
-										<th>Type</th>
-										<th>Quantity</th>
-										<th>Amount</th>
-										<th>Sold By</th>
-										<th>Comments</th>
-										<th>Pro/Loss</th>
-										<th>Action</th>
-									</tr>
-								</thead>
-											<tbody>
-													<?php 
-													$AmntSum=0;
-													$QtySum=0;
-													$plSum=0;
-													if (isset($_POST['Showtbl_cardss']))
-													{													
-													$sql = mysqli_query($con,"$NewQuery")or die(mysqli_query());
-														WHILE($Data=mysqli_fetch_array($sql))
-													    {
-															
-															$Dat=$Data['csDate'];
-															$thisEmp=$Data['csEmp'];
-															$Type= $Data['csType'];
-															$Qty= $Data['csQty'];
-															$Amnt= $Data['csTotalAmnt'];
-															$user= $Data['User'];
-															$Cmnts= $Data['csComments'];
-															$pl=$Data['csProLoss'];
-															
-															$AmntSum=$AmntSum + $Amnt;
-																$QtySum=$QtySum+$Qty;
-															$id = $Data['csID'];
-															$d=strtotime($Dat);
-																	$dtNow=date("d-M-Y", $d);
-																	echo "<tr>";
-																	echo "<td style=\"text-align: Center;\">". $dtNow ."</td>";
-																	echo "<td>". $thisEmp ."</td>";
-																	echo "<td>".$Type."</td>";
-																	echo "<td>".$Qty."</td>";
-																	echo "<td>".$Amnt."</td>";
-																	echo "<td>".$user."</td>";
-																	echo "<td>".$Cmnts."</td>";
-																	echo "<td>".$pl."</td>";
-																	if ($currentUserType=="Admin" && $Dat>=$QueryFD && $Dat<=$QueryLD)
-																		echo "<td><a onClick=\"javascript: return confirm('Please confirm Deletion');\" href=\"delete/delsalesummary.php?ID=".$id."&for=".$pNameHere."\" id=\"LinkBtnDel\">Delete</a></td>";
-																	else if($currentUserType=="Manager" && $Dat==date("Y-m-d"))
-																		echo "<td><a onClick=\"javascript: return confirm('Please confirm Deletion');\" href=\"delete/delsalesummary.php?ID=".$id."&for=".$pNameHere."\" id=\"LinkBtnDel\">Delete</a></td>";
-																	else
-																		echo "<td></td>";
-																	echo "</tr>";
-															
-															
-															$plSum=$plSum+$pl;
-														}
-													}
-													?>
-											</tbody>
-											<tfoot >
-								<tr style="border: solid black 2px;"  >
-								<td colspan="3" > <b> TOTAL AMOUNT: </b></td>
-								<td colspan="1" > <b><?php echo $QtySum; ?></b></td>
-								<td colspan="1" > <b><?php echo $AmntSum; ?></b></td>
-								<td colspan="2" > </td>
-								<td colspan="1" > <b><?php echo $plSum; ?></b></td>
-								<td colspan="1" > </td>
-								</tr>
-								</tfoot>
-							</table>
-						<?php
-						}
-			else if($pNameHere=='Mobile')
-						{
-						?>
-			
-							<div  style="border: solid black 0px; ">
-											<form  action="" method="POST">
-													<table cellpadding="0" cellspacing="0" border="0" class="table" id="headTable" >
-														<tr>
-																	<td style="text-align: right;"> Employee: </td>
-																	<td style="text-align: left;" >
-																			<select name="EmpSelect" id="sBox">
-																					<option >---</option>
-																					<?php
-																						$doQ=mysqli_query($con,"SELECT EmpName from empinfo WHERE EmpStatus='Active'Order by sort_order ASC");
-																						while($data=mysqli_fetch_array($doQ))
-																							{
-																								if( $data['EmpName']==$_POST['EmpSelect'] )
-																									echo "<option selected>";
-																								else
-																									echo "<option>";
-																								echo $data['EmpName'];
-																								echo "</option>";
-																							}
-																					?>
-																			</select>	
-																	</td>
-																	<td style="text-align: right;"> Device Type: </td>
-																	<td style="text-align: left;" >
-																			<select name="SubPselect" id="sBox">
-																				<option >---</option>
-																				<?php
-																					$doQ=mysqli_query($con,"SELECT typeName from types WHERE productName='Mobile' AND isActive=1");
-																						while($data=mysqli_fetch_array($doQ))
-																						{
-																							if($data['typeName']==$_POST['SubPselect'])
-																								echo "<option selected>";
-																							else 
-																								echo "<option>";
-																							echo $data['typeName'];
-																							echo "<br>";
-																							echo "</option>";
-																						}
-																				?>
-																			</select>	
-																	</td>
-																	<td style="text-align: right;"> Date From:</td>
-																	<td style="text-align: left;">
-																			<?php
-																			if (isset($_POST['ShowMobileSales']))
-																				$strDate1=$_POST['txtDateFrom'];
-																			else
-																				$strDate1=$CurrentDate; //$QueryFD date('Y-m-d');
-																			
-																			echo "<input type=\"date\" value= \"$strDate1\"  name=\"txtDateFrom\" id=\"tBox\" >";
-																			?>
-																	</td>
-															
-																	<td style="text-align: right;"> Date To:</td>
-																	<td style="text-align: left;">
-																			<?php
-																			if (isset($_POST['ShowMobileSales']))
-																				$strDate2=$_POST['txtDateTo'];
-																			else
-																				$strDate2= date('Y-m-d');
-																			
-																			echo "<input type=\"date\" value= \"$strDate2\"  name=\"txtDateTo\" id=\"tBox\">";
-																			?>
-																	
-										 								<input type="submit"  value="Show" name="ShowMobileSales" id="Btn" onclick="checkInput()">
-																	</td>
-																</tr>
-																
-													</table>
-											</form>
-													
-							</div>
-							<table cellpadding="0" cellspacing="0" border="1" class="" id="dbResult">
-								<thead>
-									<tr>
-										<th>Date</th>
-										<th>Employee</th>
-										<th>Type</th>
-										<th>Quantity</th>
-										<th>Rate</th>
-										<th>Amount</th>
-										<th>Sold By</th>
-										<th>Comments</th>
-										<th>Pro/Loss</th>	
-										<th>Action</th>
-									</tr>
-								</thead>
-											<tbody>
-													<?php 
-													$AmntSum=0;
-													$QtySum=0;
-													$plSum=0;
-													if (isset($_POST['ShowMobileSales']))
-													{													
-													$sql = mysqli_query($con,"$NewQuery")or die(mysqli_query());
-														WHILE($Data=mysqli_fetch_array($sql))
-													{
-															$Dat=$Data['sDate'];
-															$thisEmp=$Data['customer'];
-															$Type= $Data['pSubType'];
-															$Qty= $Data['qty'];
-															$rat= $Data['rate'];
-															$Amnt= $Qty*$rat;
-															$user= $Data['User'];
-															$Cmnts= $Data['sComments'];
-															
-															
-															
-															//getting purchase rate
-															    $qry110 = mysqli_query($con,"SELECT purchasePrice FROM rates WHERE pName='Mobile' AND spName='$Type' ORDER BY rtID DESC LIMIT 1")or die(mysqli_query());
-                                                        		$Data110=mysqli_fetch_array($qry110);
-                                                        		$PurchaseRate= $Data110['purchasePrice'];
-															
-															$cost=$Qty*$PurchaseRate;
-															$pl=$Amnt-$cost;
-															
-															
-															$AmntSum=$AmntSum + $Amnt;
-																$QtySum=$QtySum+$Qty;
-															$id = $Data['sID'];
-															$d=strtotime($Dat);
-																	$dtNow=date("d-M-Y", $d);
-																	echo "<tr>";
-																	echo "<td style=\"text-align: Center;\">". $dtNow ."</td>";
-																	echo "<td>". $thisEmp ."</td>";
-																	echo "<td>".$Type."</td>";
-																	echo "<td>".$Qty."</td>";
-																	echo "<td>".$rat."</td>";
-																	echo "<td>".$Amnt."</td>";
-																	echo "<td>".$user."</td>";
-																	echo "<td>".$Cmnts."</td>";
-																	echo "<td>".$pl."</td>";
-																	if ($currentUserType=="Admin" && $Dat>=$QueryFD && $Dat<=$QueryLD)
-																		echo "<td><a onClick=\"javascript: return confirm('Please confirm Deletion');\" href=\"delete/delsalesummary.php?ID=".$id."&for=".$pNameHere."\" id=\"LinkBtnDel\">Delete</a></td>";
-																	else if($currentUserType=="Manager" && $Dat==date("Y-m-d"))
-																		echo "<td><a onClick=\"javascript: return confirm('Please confirm Deletion');\" href=\"delete/delsalesummary.php?ID=".$id."&for=".$pNameHere."\" id=\"LinkBtnDel\">Delete</a></td>";
-																	else
-																		echo "<td></td>";
-																	echo "</tr>";
-															
-															$plSum=$plSum+$pl;
-														}
-													}
-													?>
-											</tbody>
-											<tfoot >
-								<tr style="border: solid black 2px;"  >
-								<td colspan="3" style="text-align: right;"> <b> TOTAL AMOUNT: </b></td>
-								<td colspan="1"style="text-align: Center;" > <b><?php echo $QtySum; ?></b></td>
-								<td></td>
-								<td colspan="1" style="text-align: right;"> <b><?php echo $AmntSum; ?></b></td>
-								<td colspan="2" > </td>
-								<td colspan="1" > <b><?php echo $plSum; ?></b></td>
-								<td colspan="1" > </td>
-								</tr>
-								</tfoot>
-							</table>
-						<?php
-						}
-			else if($pNameHere=='SIM')
-						{
-						?>
-			
-							<div  style="border: solid black 0px; ">
-											<form  action="" method="POST">
-													<table cellpadding="0" cellspacing="0" border="0" class="table" id="headTable" >
-														<tr>
-																	<td style="text-align: right;"> Employee: </td>
-																	<td style="text-align: left;" >
-																			<select name="EmpSelect" id="sBox">
-																					<option >---</option>
-																					<?php
-																						$doQ=mysqli_query($con,"SELECT EmpName from empinfo WHERE EmpStatus='Active'Order by sort_order ASC");
-																						while($data=mysqli_fetch_array($doQ))
-																							{
-																								if( $data['EmpName']==$_POST['EmpSelect'] )
-																									echo "<option selected>";
-																								else
-																									echo "<option>";
-																								echo $data['EmpName'];
-																								echo "</option>";
-																							}
-																					?>
-																			</select>	
-																	</td>
-																	<td style="text-align: right;"> SIM Type: </td>
-																	<td style="text-align: left;" >
-																			<select name="SubPselect" id="sBox">
-																				<option >---</option>
-																				<?php
-																					$doQ=mysqli_query($con,"SELECT typeName from types WHERE productName='SIM' AND isActive=1");
-																						while($data=mysqli_fetch_array($doQ))
-																						{
-																							if($data['typeName']==$_POST['SubPselect'])
-																								echo "<option selected>";
-																							else 
-																								echo "<option>";
-																							echo $data['typeName'];
-																							echo "<br>";
-																							echo "</option>";
-																						}
-																				?>
-																			</select>	
-																	</td>
-																	<td style="text-align: right;"> Date From:</td>
-																	<td style="text-align: left;">
-																			<?php
-																			if (isset($_POST['ShowsIMSales']))
-																				$strDate1=$_POST['txtDateFrom'];
-																			else
-																				$strDate1=$CurrentDate; //$QueryFD date('Y-m-d');
-																			
-																			echo "<input type=\"date\" value= \"$strDate1\"  name=\"txtDateFrom\" id=\"tBox\" >";
-																			?>
-																	</td>
-															
-																	<td style="text-align: right;"> Date To:</td>
-																	<td style="text-align: left;">
-																			<?php
-																			if (isset($_POST['ShowsIMSales']))
-																				$strDate2=$_POST['txtDateTo'];
-																			else
-																				$strDate2= date('Y-m-d');
-																			
-																			echo "<input type=\"date\" value= \"$strDate2\"  name=\"txtDateTo\" id=\"tBox\">";
-																			?>
-																	
-										 								<input type="submit"  value="Show" name="ShowsIMSales" id="Btn" onclick="checkInput()">
-																	</td>
-																</tr>
-																
-													</table>
-											</form>
-													
-							</div>
-							<table cellpadding="0" cellspacing="0" border="1" class="" id="dbResult">
-								<thead>
-									<tr>
-										<th>Date</th>
-										<th>Employee</th>
-										<th>Type</th>
-										<th>Quantity</th>
-										<th>Rate</th>
-										<th>Amount</th>
-										<th>Sold By</th>
-										<th>Comments</th>
-										<th>Pro/Loss</th>
-										<th>Action</th>
-									</tr>
-								</thead>
-											<tbody>
-													<?php 
-													$AmntSum=0;
-													$QtySum=0;
-													$plSum=0;
-													if (isset($_POST['ShowsIMSales']))
-													{													
-													$sql = mysqli_query($con,"$NewQuery")or die(mysqli_query());
-														WHILE($Data=mysqli_fetch_array($sql))
-													{
-															$Dat=$Data['sDate'];
-															$thisEmp=$Data['customer'];
-															$Type= $Data['pSubType'];
-															$Qty= $Data['qty'];
-															$user= $Data['User'];
-															$rat= $Data['rate'];
-															$Amnt= $Qty*$rat;
-															$Cmnts= $Data['sComments'];
-															
-															
-															
-															//getting purchase rate
-															    $qry110 = mysqli_query($con,"SELECT purchasePrice FROM rates WHERE pName='SIM' AND spName='$Type' ORDER BY rtID DESC LIMIT 1")or die(mysqli_query());
-                                                        		$Data110=mysqli_fetch_array($qry110);
-                                                        		$PurchaseRate= $Data110['purchasePrice'];
-															
-															$cost=$Qty*$PurchaseRate;
-															$pl=$Amnt-$cost;
-															
-															
-															$AmntSum=$AmntSum + $Amnt;
-																$QtySum=$QtySum+$Qty;
-															$id = $Data['sID'];
-															$d=strtotime($Dat);
-																	$dtNow=date("d-M-Y", $d);
-																	echo "<tr>";
-																	echo "<td style=\"text-align: Center;\">". $dtNow ."</td>";
-																	echo "<td>". $thisEmp ."</td>";
-																	echo "<td>".$Type."</td>";
-																	echo "<td>".$Qty."</td>";
-																	echo "<td>".$rat."</td>";
-																	echo "<td>".$Amnt."</td>";
-																	echo "<td>".$user."</td>";
-																	echo "<td>".$Cmnts."</td>";
-																	echo "<td>".$pl."</td>";
-																	if ($currentUserType=="Admin" && $Dat>=$QueryFD && $Dat<=$QueryLD)
-																		echo "<td><a onClick=\"javascript: return confirm('Please confirm Deletion');\" href=\"delete/delsalesummary.php?ID=".$id."&for=".$pNameHere."\" id=\"LinkBtnDel\">Delete</a></td>";
-																	else if($currentUserType=="Manager" && $Dat==date("Y-m-d"))
-																		echo "<td><a onClick=\"javascript: return confirm('Please confirm Deletion');\" href=\"delete/delsalesummary.php?ID=".$id."&for=".$pNameHere."\" id=\"LinkBtnDel\">Delete</a></td>";
-																	else
-																		echo "<td></td>";
-																	echo "</tr>";
-															
-															$plSum=$plSum+$pl;
-														}
-													}
-													?>
-											</tbody>
-											<tfoot >
-								<tr style="border: solid black 2px;"  >
-								<td colspan="3" style="text-align: right;"> <b> TOTAL AMOUNT: </b></td>
-								<td colspan="1"style="text-align: Center;" > <b><?php echo $QtySum; ?></b></td>
-								<td></td>
-								<td colspan="1" style="text-align: right;"> <b><?php echo $AmntSum; ?></b></td>
-								<td colspan="2" > </td>
-								<td colspan="1" > <b><?php echo $plSum; ?></b></td>
-								<td colspan="1" > </td>
-								</tr>
-								</tfoot>
-							</table>
-						<?php
-						}
-						
-						
-						
-					else
-					echo "<h2>Select an option then press \"Show\" Button</h2>";
-						?>
-						
-	</div>
+use App\Services\InventoryService;
+use App\Core\Database;
+
+$inventoryService = new InventoryService();
+$db = Database::getInstance();
+
+$pNameHere = $_GET['for'] ?? 'Otar';
+$filters = [
+    'startDate' => $_POST['txtDateFrom'] ?? date('Y-m-d'),
+    'endDate' => $_POST['txtDateTo'] ?? date('Y-m-d'),
+    'employee' => $_POST['EmpSelect'] ?? '---',
+    'subType' => $_POST['SubPselect'] ?? '---'
+];
+
+// Data fetching
+$transactions = [];
+if ($pNameHere === 'Otar' || $pNameHere === 'mfs') {
+    $transactions = $inventoryService->getTransactions($pNameHere, $filters);
+} else {
+    $transactions = $inventoryService->getDetailedSales($pNameHere, $filters['startDate'], $filters['endDate'], $filters['employee'], $filters['subType']);
+}
+
+// Fetch all product names for the top navigation bar
+$productTypesRes = $db->query("SELECT pName FROM products")->fetchAll();
+
+// Legacy session support
+$currentActiveUser = $_SESSION['login_user'] ?? '';
+$currentUserType = $_SESSION['login_type'] ?? '';
+$isMonthLocked = false; // Legacy check placeholder
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Summary - NadirCom</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-indigo-50/30 text-slate-900 antialiased">
+    
+    <!-- Navbar -->
+    <div class="bg-indigo-700 text-white py-2 px-4 shadow-lg mb-8">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+             <div class="flex items-center space-x-6">
+                 <a href="summary.php" class="font-bold text-lg hover:text-indigo-200 transition">NadirCom Dashboard</a>
+                 <nav class="hidden md:flex space-x-4 text-sm font-medium">
+                     <a href="dosales.php?name=DO" class="hover:text-indigo-200">Sales</a>
+                     <a href="salesummary.php?for=Otar" class="text-white border-b-2 border-white pb-1">Summary</a>
+                     <a href="stock.php?for=Otar" class="hover:text-indigo-200 text-indigo-100">Stock</a>
+                 </nav>
+             </div>
+             <div class="flex items-center space-x-4 text-sm">
+                 <span class="text-indigo-100">Welcome, <b><?php echo htmlspecialchars($currentActiveUser); ?></b></span>
+                 <a href="../logout.php" class="bg-indigo-800 hover:bg-indigo-900 px-3 py-1 rounded transition line-clamp-1">Logout</a>
+             </div>
+        </div>
+    </div>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-12">
+        <div class="mb-10 flex justify-between items-end">
+            <div>
+                <h1 class="text-4xl font-black text-slate-900 tracking-tight">Sales Intelligence</h1>
+                <p class="mt-2 text-slate-500 font-medium">Granular transaction logs and performance metrics.</p>
+            </div>
+            <div class="text-right">
+                <span class="text-[10px] font-black uppercase text-indigo-400 tracking-[0.2em]">Context</span>
+                <p class="text-sm font-bold text-indigo-900"><?php echo htmlspecialchars($pNameHere); ?> Portfolio</p>
+            </div>
+        </div>
+
+        <!-- Category Picker -->
+        <div class="flex flex-wrap items-center gap-2 mb-10 p-1.5 bg-indigo-100/50 rounded-2xl w-fit">
+            <?php foreach ($productTypesRes as $pt): ?>
+                <a href="salesummary.php?for=<?php echo urlencode($pt['pName']); ?>" class="px-5 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition <?php echo $pNameHere === $pt['pName'] ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:bg-indigo-200/50'; ?>">
+                    <?php echo htmlspecialchars($pt['pName']); ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+
+        <!-- Multi-Filter Board -->
+        <form method="POST" class="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-indigo-100/20 border border-slate-100 mb-10">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-end">
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Filter by Personnel</label>
+                    <select name="EmpSelect" class="w-full bg-slate-50 border-none text-slate-900 text-sm rounded-2xl focus:ring-2 focus:ring-indigo-500 p-3 font-bold">
+                        <option value="---">Full Team</option>
+                        <?php
+                            $employees = $db->query("SELECT EmpName FROM empinfo WHERE EmpStatus='Active' ORDER BY sort_order ASC")->fetchAll();
+                            foreach ($employees as $emp) {
+                                $sel = ($emp['EmpName'] == $filters['employee']) ? 'selected' : '';
+                                echo "<option $sel>" . htmlspecialchars($emp['EmpName']) . "</option>";
+                            }
+                        ?>
+                    </select>
+                </div>
+
+                <?php if (!($pNameHere === 'Otar' || $pNameHere === 'mfs')): ?>
+                <div>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Product Variant</label>
+                    <select name="SubPselect" class="w-full bg-slate-50 border-none text-slate-900 text-sm rounded-2xl focus:ring-2 focus:ring-indigo-500 p-3 font-bold">
+                        <option value="---">Global Inventory</option>
+                        <?php
+                            $variants = $db->query("SELECT typeName FROM types WHERE productName=? AND isActive=1", [$pNameHere])->fetchAll();
+                            foreach ($variants as $v) {
+                                $sel = ($v['typeName'] == $filters['subType']) ? 'selected' : '';
+                                echo "<option $sel>" . htmlspecialchars($v['typeName']) . "</option>";
+                            }
+                        ?>
+                    </select>
+                </div>
+                <?php endif; ?>
+
+                <div class="flex gap-4 lg:col-span-2">
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Period Start</label>
+                        <input type="date" name="txtDateFrom" value="<?php echo $filters['startDate']; ?>" class="w-full bg-slate-50 border-none text-slate-900 text-sm rounded-2xl focus:ring-2 focus:ring-indigo-500 p-3 font-bold">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Period End</label>
+                        <input type="date" name="txtDateTo" value="<?php echo $filters['endDate']; ?>" class="w-full bg-slate-50 border-none text-slate-900 text-sm rounded-2xl focus:ring-2 focus:ring-indigo-500 p-3 font-bold">
+                    </div>
+                    <button type="submit" name="<?php echo ($pNameHere === 'Otar' || $pNameHere === 'mfs') ? "Show{$pNameHere}Sales" : ($pNameHere === 'Card' ? 'Showtbl_cardss' : "Show{$pNameHere}Sales"); ?>" class="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition shadow-lg shadow-indigo-200">
+                        Search
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <!-- Insights Grid (Optional) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Total Volume</p>
+                <p class="text-2xl font-black text-slate-900"><?php echo count($transactions); ?> <span class="text-xs font-bold text-slate-400">Trans.</span></p>
+            </div>
+            <div class="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Gross Value</p>
+                <?php 
+                    $grossVal = array_sum(array_map(function($t) use ($pNameHere) {
+                        return $pNameHere === 'Otar' ? $t['loadAmnt'] : ($pNameHere === 'mfs' ? $t['mfsAmnt'] : $t['amount']);
+                    }, $transactions));
+                ?>
+                <p class="text-2xl font-black text-indigo-600 font-mono">Rs. <?php echo number_format($grossVal); ?></p>
+            </div>
+            <div class="bg-emerald-500 p-6 rounded-3xl text-white shadow-lg shadow-emerald-100">
+                <p class="text-[10px] font-black text-emerald-100 uppercase tracking-wider mb-1">Total Profit</p>
+                <?php 
+                    $totalPL = array_sum(array_map(function($t) { return $t['proLoss'] ?? 0; }, $transactions));
+                ?>
+                <p class="text-2xl font-black font-mono">Rs. <?php echo number_format($totalPL); ?></p>
+            </div>
+        </div>
+
+        <!-- Transaction Journal -->
+        <div class="bg-white shadow-2xl rounded-[2.5rem] overflow-hidden border border-slate-100">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-100">
+                    <thead>
+                        <tr class="bg-slate-50/50">
+                            <th class="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Temporal</th>
+                            <th class="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Entity / Channel</th>
+                            <?php if (!($pNameHere === 'Otar' || $pNameHere === 'mfs')): ?>
+                                <th class="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Variant</th>
+                                <th class="px-8 py-5 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest">Units</th>
+                            <?php endif; ?>
+                            <th class="px-8 py-5 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Gross (PKR)</th>
+                            <th class="px-8 py-5 text-left text-[10px] font-black text-slate-400 uppercase tracking-widest">Auditor</th>
+                            <th class="px-8 py-5 text-right text-[10px] font-black text-emerald-500 uppercase tracking-widest bg-emerald-50/30">Yield</th>
+                            <th class="px-8 py-5 text-center text-[10px] font-black text-rose-500 uppercase tracking-widest">Ctrl</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-50">
+                        <?php if (empty($transactions)): ?>
+                            <tr><td colspan="10" class="px-8 py-20 text-center text-slate-300 font-bold italic h-64">The ledger is silent. Try adjusting your filters.</td></tr>
+                        <?php else: ?>
+                            <?php foreach ($transactions as $t): 
+                                $date = $pNameHere === 'Otar' ? $t['loadDate'] : ($pNameHere === 'mfs' ? $t['mfsDate'] : ($t['csDate'] ?? $t['sDate']));
+                                $ent = $pNameHere === 'Otar' ? $t['loadEmp'] : ($pNameHere === 'mfs' ? $t['mfsEmp'] : ($t['csEmp'] ?? $t['customer']));
+                                $val = $pNameHere === 'Otar' ? $t['loadAmnt'] : ($pNameHere === 'mfs' ? $t['mfsAmnt'] : $t['amount']);
+                                $id = $pNameHere === 'Otar' ? $t['loadID'] : ($pNameHere === 'mfs' ? $t['mfsID'] : ($t['csID'] ?? $t['sID']));
+                                $yield = $t['proLoss'] ?? 0;
+                            ?>
+                                <tr class="hover:bg-slate-50 transition group">
+                                    <td class="px-8 py-5 whitespace-nowrap text-xs font-bold text-slate-500"><?php echo date("d M Y", strtotime($date)); ?></td>
+                                    <td class="px-8 py-5 whitespace-nowrap text-sm font-black text-slate-900"><?php echo htmlspecialchars($ent); ?></td>
+                                    <?php if (!($pNameHere === 'Otar' || $pNameHere === 'mfs')): ?>
+                                        <td class="px-8 py-5 whitespace-nowrap text-xs font-bold text-indigo-600 bg-indigo-50/30 rounded-full px-3 inline-block m-4 select-none"><?php echo htmlspecialchars($t['csType'] ?? $t['pSubType']); ?></td>
+                                        <td class="px-8 py-5 whitespace-nowrap text-sm text-center font-mono font-bold text-slate-600"><?php echo number_format($t['csQty'] ?? $t['qty']); ?></td>
+                                    <?php endif; ?>
+                                    <td class="px-8 py-5 whitespace-nowrap text-sm text-right font-black font-mono text-indigo-700 tracking-tighter">Rs. <?php echo number_format($val); ?></td>
+                                    <td class="px-8 py-5 whitespace-nowrap text-xs font-medium text-slate-400 italic"><?php echo htmlspecialchars($t['User']); ?></td>
+                                    <td class="px-8 py-5 whitespace-nowrap text-sm text-right font-bold text-emerald-600 bg-emerald-50/10 font-mono">+<?php echo number_format($yield); ?></td>
+                                    <td class="px-8 py-5 whitespace-nowrap text-center">
+                                        <?php if ($currentUserType == "Admin" || (date("Y-m-d") == $date)): ?>
+                                            <a href="delete/delsalesummary.php?ID=<?php echo $id; ?>&for=<?php echo urlencode($pNameHere); ?>" class="opacity-0 group-hover:opacity-100 bg-rose-50 text-rose-600 text-[10px] font-black uppercase px-4 py-1.5 rounded-xl transition hover:bg-rose-600 hover:text-white" onclick="return confirm('Purge record #<?php echo $id; ?>?')">Purge</a>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+</body>
+</html>
